@@ -1,0 +1,371 @@
+import { usePlaybackTime, type PlaybackPosition } from './playback-position';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { CSSProperties, Ref } from 'react';
+import {
+  Film,
+  Info,
+  LoaderCircle,
+  Pause,
+  Play,
+  SkipBack,
+  StepBack,
+  StepForward,
+  SkipForward,
+} from 'lucide-react';
+import type { Editor, Project, PreviewSession } from '../editor';
+import { Button } from '../components/ui/button';
+import { Tooltip } from '../components/ui/tooltip';
+import { useViewport } from './useViewport';
+import { formatTime, projectDuration, previewFrameSize } from './helpers';
+
+interface Props {
+  versionId?: string;
+  editor: Editor | null;
+  project: Project | null;
+  timeUs: number;
+  position: PlaybackPosition;
+  seekRevision: number;
+  onTime: (timeUs: number) => void;
+  onImport: () => void;
+  onError: (error: unknown) => void;
+  controlsRef?: Ref<PreviewControls>;
+}
+export interface PreviewControls {
+  togglePlayback: () => void;
+  play: () => void;
+  pause: () => void;
+}
+export function Preview({
+  editor,
+  versionId,
+  project,
+  timeUs,
+  seekRevision,
+  position,
+  onTime,
+  onImport,
+  onError,
+  controlsRef,
+}: Props) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const session = useRef<PreviewSession | null>(null);
+  const audio = useRef<AudioContext | null>(null);
+  const playIdentity = `${project?.id}:${project?.revision}:${versionId}:${seekRevision}`;
+  const [playingIdentity, setPlayingIdentity] = useState<string | null>(null);
+  const playing = playingIdentity === playIdentity;
+  const generation = useRef(0);
+  const [loading, setLoading] = useState(false);
+  const total = projectDuration(project);
+  const dimensions = previewFrameSize(project);
+  const { ref: viewport, view } = useViewport(
+    'preview',
+    `${project?.id}:${versionId}`,
+    total > 0,
+  );
+  const frameDuration = project
+    ? (1e6 * project.frameRate.den) / project.frameRate.num
+    : 1e6 / 30;
+  // Rational frame durations can be fractional; the engine seeks in whole µs.
+  const displayedTime = Math.round(
+    Math.min(timeUs, Math.max(0, total - frameDuration)),
+  );
+  const onTimeRef = useRef(onTime);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onTimeRef.current = onTime;
+    onErrorRef.current = onError;
+  }, [onTime, onError]);
+  useEffect(() => {
+    generation.current++;
+    session.current?.dispose();
+    session.current = null;
+  }, [project?.id, project?.revision, versionId]);
+  useEffect(() => {
+    generation.current++;
+    session.current?.pause();
+  }, [seekRevision]);
+  useEffect(
+    () => () => {
+      generation.current++;
+      session.current?.dispose();
+      void audio.current?.close();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!editor || !project || !total || !canvas.current || playing) return;
+    let stale = false;
+    const job = editor.preview.frame(
+      project.id,
+      Math.round(displayedTime),
+      previewFrameSize(project),
+      versionId,
+    );
+    const unsubscribe = job.subscribe((event) => {
+      if (!stale) setLoading(event.state === 'running');
+    });
+    void job.completion
+      .then((result) => {
+        try {
+          if (!stale)
+            canvas.current
+              ?.getContext('2d')
+              ?.drawImage(
+                result.image,
+                0,
+                0,
+                canvas.current.width,
+                canvas.current.height,
+              );
+        } finally {
+          result.image.close();
+        }
+      })
+      .catch((error) => {
+        if (!stale && error?.code !== 'CANCELLED') onErrorRef.current(error);
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+    return () => {
+      stale = true;
+      unsubscribe();
+      job.cancel();
+    };
+  }, [editor, project, versionId, displayedTime, total, playing]);
+  useEffect(() => {
+    if (!playing) return;
+    const playbackPosition = position;
+    let animation: number;
+    const tick = () => {
+      const position = session.current?.currentTimeUs ?? 0;
+      playbackPosition.publish(position);
+      if (position >= total) {
+        onTimeRef.current(position);
+        setPlayingIdentity(null);
+        return;
+      }
+      animation = requestAnimationFrame(tick);
+    };
+    animation = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animation);
+  }, [playing, total, position]);
+  const seek = async (position: number) => {
+    generation.current++;
+    session.current?.pause();
+    setPlayingIdentity(null);
+    onTime(Math.round(position));
+  };
+  const play = async () => {
+    if (!editor || !project || !canvas.current) return;
+    if (playing) {
+      generation.current++;
+      session.current?.pause();
+      onTime(session.current?.currentTimeUs ?? displayedTime);
+      setPlayingIdentity(null);
+      return;
+    }
+    const token = ++generation.current;
+    try {
+      audio.current ??= new AudioContext();
+      await audio.current.resume();
+      if (token !== generation.current) return;
+      if (!session.current) {
+        session.current = editor.preview.session(
+          project.id,
+          canvas.current,
+          audio.current,
+          versionId,
+        );
+        session.current.onError((error) => {
+          onTimeRef.current(
+            session.current?.currentTimeUs ?? position.getSnapshot(),
+          );
+          setPlayingIdentity(null);
+          onErrorRef.current(error);
+        });
+      }
+      await session.current.seek(
+        position.getSnapshot() >= total ? 0 : position.getSnapshot(),
+      );
+      if (token !== generation.current) return;
+      setLoading(true);
+      await session.current.play();
+      if (token !== generation.current) {
+        session.current?.pause();
+        return;
+      }
+      setPlayingIdentity(playIdentity);
+    } catch (error) {
+      if (token === generation.current) onError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useImperativeHandle(controlsRef, () => ({
+    togglePlayback: () => void play(),
+    play: () => {
+      if (!playing) void play();
+    },
+    pause: () => {
+      generation.current++;
+      session.current?.pause();
+      if (playing) onTime(session.current?.currentTimeUs ?? displayedTime);
+      setPlayingIdentity(null);
+    },
+  }));
+  return (
+    <section className="preview" aria-label="Project preview">
+      <div
+        className="preview-frame"
+        style={
+          {
+            '--preview-ratio': project
+              ? project.width / project.height
+              : 16 / 9,
+          } as CSSProperties
+        }
+      >
+        <div
+          ref={viewport}
+          className="preview-stage"
+          data-editor-viewport="preview"
+          tabIndex={0}
+          aria-label="Preview view"
+          onDoubleClick={(event) => {
+            if (event.target === canvas.current)
+              event.currentTarget.dispatchEvent(
+                new CustomEvent('editor-view', { detail: 'zoomFit' }),
+              );
+          }}
+          style={{
+            aspectRatio: project
+              ? `${project.width}/${project.height}`
+              : '16/9',
+          }}
+        >
+          <canvas
+            ref={canvas}
+            style={{
+              transformOrigin: '0 0',
+              transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+            }}
+            width={dimensions.width}
+            height={dimensions.height}
+            aria-label="Video preview"
+            tabIndex={0}
+            hidden={!total}
+          />
+          {!total && (
+            <div className="empty-preview">
+              <Film aria-hidden="true" />
+              <h1>
+                {versionId ? 'Empty timeline' : 'Start with your footage.'}
+              </h1>
+              {!versionId && <Button onClick={onImport}>Import media</Button>}
+            </div>
+          )}
+          {loading && total > 0 && (
+            <LoaderCircle
+              className="preview-loading animate-spin"
+              aria-label="Loading preview"
+            />
+          )}
+        </div>
+      </div>
+      <div className="playback-controls">
+        <span className="timecode">
+          <PlaybackTimecode position={position} />{' '}
+          <span className="text-muted-foreground">/ {formatTime(total)}</span>
+        </span>
+        <div className="flex items-center gap-1">
+          {!!total && (
+            <Tooltip content="Go to first frame">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Go to first frame"
+                onClick={() => void seek(0)}
+              >
+                <SkipBack />
+              </Button>
+            </Tooltip>
+          )}
+          {!!total && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Previous frame"
+              onClick={() =>
+                void seek(
+                  Math.max(
+                    0,
+                    Math.min(
+                      position.getSnapshot(),
+                      Math.max(0, total - frameDuration),
+                    ) - frameDuration,
+                  ),
+                )
+              }
+            >
+              <StepBack />
+            </Button>
+          )}
+          {!!total && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={playing ? 'Pause preview' : 'Play preview'}
+              onClick={() => void play()}
+            >
+              {playing ? <Pause /> : <Play />}
+            </Button>
+          )}
+          {!!total && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Next frame"
+              onClick={() =>
+                void seek(
+                  Math.min(
+                    Math.max(0, total - frameDuration),
+                    Math.min(
+                      position.getSnapshot(),
+                      Math.max(0, total - frameDuration),
+                    ) + frameDuration,
+                  ),
+                )
+              }
+            >
+              <StepForward />
+            </Button>
+          )}
+          {!!total && (
+            <Tooltip content="Go to last frame">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Go to last frame"
+                onClick={() => void seek(Math.max(0, total - frameDuration))}
+              >
+                <SkipForward />
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+        <Tooltip
+          content={`${project?.width ?? 1920} × ${project?.height ?? 1080} · ${project ? (project.frameRate.num / project.frameRate.den).toFixed(2).replace(/\.00$/, '') : 30} fps`}
+        >
+          <Button variant="ghost" size="icon-sm" aria-label="Preview settings">
+            <Info />
+          </Button>
+        </Tooltip>
+      </div>
+    </section>
+  );
+}
+
+function PlaybackTimecode({ position }: { position: PlaybackPosition }) {
+  return formatTime(usePlaybackTime(position));
+}

@@ -1,0 +1,750 @@
+import { createWorkspace } from './workspace-project-helper';
+import { navigateWorkspace } from './workspace-project-helper';
+import { behaviorBases } from './coverage-bases';
+import { dismissNotifications } from './workspace-notifications-helper';
+import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+async function importInvalidBackup(page: Page) {
+  await page
+    .getByLabel('Import project backup', { exact: true })
+    .setInputFiles({
+      name: 'invalid-project.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from('invalid project backup'),
+    });
+}
+
+// System clipboard is shared by Chrome contexts; keep these assertions serial.
+test.describe.configure({ mode: 'serial' });
+
+for (const base of behaviorBases) {
+  test(`saved task failures stay quiet on restart while fresh failures notify ${base}`, async ({
+    page,
+  }) => {
+    let providerRequests = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('openrouter.ai/api/v1/chat/completions'))
+        providerRequests++;
+    });
+    await page.goto(base);
+    const projectId = await page.evaluate(async (base) => {
+      const { createEditor, TaskQueue } = await import(base + 'editor.js');
+      const editor = await createEditor({ namespace: 'localcut' });
+      const id = (await editor.projects.create('Restart notifications')).id;
+      await editor.dispose();
+      const tasks = new TaskQueue('localcut', { pollMs: 10 });
+      tasks.register('notification-failure', {
+        lane: 'remote',
+        recovery: 'manual',
+        maxAttempts: 1,
+        execute: async () => {
+          throw Object.assign(new Error('Synthetic request rejected'), {
+            code: 'INVALID_REQUEST',
+          });
+        },
+      });
+      for (let i = 0; i < 2; i++)
+        await tasks
+          .enqueue('notification-failure', {}, { label: 'Assistant response' })
+          .completion.catch(() => {});
+      let entered!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      tasks.register('notification-paused', {
+        lane: 'remote',
+        recovery: 'manual',
+        execute: async (
+          _input: unknown,
+          { signal }: { signal: AbortSignal },
+        ) => {
+          entered();
+          await new Promise<void>((_resolve, reject) =>
+            signal.addEventListener(
+              'abort',
+              () => reject(new Error('Stopped')),
+              { once: true },
+            ),
+          );
+        },
+      });
+      const paused = tasks.enqueue(
+        'notification-paused',
+        {},
+        { label: 'Assistant response' },
+      );
+      await started;
+      await tasks.dispose();
+      await paused.completion.catch(() => {});
+      return id;
+    }, base);
+    await navigateWorkspace(page, `${base}workspace/${projectId}`);
+    const project = page.getByRole('button', {
+      name: 'Open project',
+      exact: true,
+    });
+    const errors = page.locator('[data-sonner-toast][data-type="error"]');
+    const bell = page.getByRole('button', { name: /^Notifications/ });
+    const log = page.getByRole('dialog', {
+      name: 'Notifications',
+      exact: true,
+    });
+    // Opening the task table is a readiness barrier through the live queue owner.
+    const readQueue = async () => {
+      await page
+        .getByRole('button', { name: 'Task queue', exact: true })
+        .click();
+      const dialog = page.getByRole('dialog', {
+        name: 'Task queue',
+        exact: true,
+      });
+      await expect(
+        dialog.getByRole('row', { name: 'Assistant response', exact: true }),
+      ).toHaveCount(3);
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    };
+    await expect(project).toContainText('Restart notifications');
+    await readQueue();
+    await expect(errors).toHaveCount(0);
+    await bell.click();
+    await expect(log).toContainText('No notifications yet.');
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    // Another queue in the same origin proves live cross-tab polling escalation.
+    const freshId = await page.evaluate(async (base) => {
+      const { TaskQueue } = await import(base + 'editor.js');
+      const tasks = new TaskQueue('localcut', { pollMs: 10 });
+      tasks.register('notification-failure', {
+        lane: 'remote',
+        recovery: 'manual',
+        maxAttempts: 1,
+        execute: async () => {
+          throw Object.assign(new Error('Fresh original stack'), {
+            code: 'INVALID_REQUEST',
+          });
+        },
+      });
+      const job = tasks.enqueue(
+        'notification-failure',
+        {},
+        { label: 'Fresh assistant response' },
+      );
+      await job.completion.catch(() => {});
+      Object.assign(window, { notificationQueue: tasks });
+      return job.id;
+    }, base);
+    await expect(errors).toHaveCount(1);
+    await expect(errors).toContainText('Fresh assistant response');
+    await dismissNotifications(page);
+    await page.evaluate(async (id) => {
+      const tasks = (
+        window as unknown as {
+          notificationQueue: import('../../src/services/task-queue').TaskQueue;
+        }
+      ).notificationQueue;
+      await (await tasks.retry(id)).completion.catch(() => {});
+      await tasks.dispose();
+    }, freshId);
+    await expect(errors).toHaveCount(1);
+    await errors
+      .getByRole('button', { name: 'View stack trace', exact: true })
+      .click();
+    const details = page.getByRole('dialog', {
+      name: 'Error details',
+      exact: true,
+    });
+    await expect(details.getByLabel('Full error report')).toContainText(
+      'Fresh original stack',
+    );
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await dismissNotifications(page);
+    await bell.click();
+    await expect(log).toContainText('Fresh assistant response');
+    await expect(bell.locator('[data-notification-unread]')).toHaveCount(0);
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    const history = await page.evaluate(() =>
+      localStorage.getItem('localcut.notifications.v1'),
+    );
+    await page.reload();
+    await expect(project).toContainText('Restart notifications');
+    await page.getByRole('button', { name: 'Task queue', exact: true }).click();
+    const queue = page.getByRole('dialog', { name: 'Task queue', exact: true });
+    await expect(
+      queue.getByRole('row', { name: 'Fresh assistant response', exact: true }),
+    ).toContainText('failed');
+    await queue.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(errors).toHaveCount(0);
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('localcut.notifications.v1'),
+      ),
+    ).toBe(history);
+    await expect(bell.locator('[data-notification-unread]')).toHaveCount(0);
+    // A new document and a project remount must also preserve the same history.
+    await page.goto(`${base}#/projects`);
+    await navigateWorkspace(page, `${base}workspace/${projectId}`);
+    await expect(project).toContainText('Restart notifications');
+    await bell.click();
+    await expect(log).toContainText('Fresh assistant response');
+    await log.getByRole('button', { name: /^View stack trace:/ }).click();
+    await expect(details.getByLabel('Full error report')).toContainText(
+      'Fresh original stack',
+    );
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await bell.click();
+    await log
+      .getByRole('button', { name: 'Clear history', exact: true })
+      .click();
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.reload();
+    await expect(project).toContainText('Restart notifications');
+    await readQueue();
+    await expect(errors).toHaveCount(0);
+    await bell.click();
+    await expect(log).toContainText('No notifications yet.');
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    // Unload the live queue before seeding a task abandoned by a closed tab.
+    // Otherwise its poll can recover the fixture before the simulated restart.
+    const workspaceUrl = page.url();
+    const fixtureUrl = new URL(`${base}notification-fixture.html`, page.url())
+      .href;
+    await page.route(fixtureUrl, (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><title>Task fixture</title>',
+      }),
+    );
+    await page.goto(fixtureUrl);
+    await page.evaluate(async (freshId) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('localcut-tasks-v1', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const transaction = db.transaction('tasks', 'readwrite');
+          const store = transaction.objectStore('tasks');
+          const read = store.get(freshId);
+          read.onsuccess = () =>
+            store.put({
+              ...read.result,
+              id: 'abandoned-notification',
+              label: 'Abandoned assistant response',
+              state: 'running',
+              stage: 'Working',
+              error: undefined,
+            });
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+      } finally {
+        db.close();
+      }
+    }, freshId);
+    await page.goto(workspaceUrl);
+    await expect(project).toContainText('Restart notifications');
+    await expect(errors).toHaveCount(1);
+    await expect(errors).toContainText('Abandoned assistant response');
+    await expect(errors).toContainText('Task interrupted');
+    await dismissNotifications(page);
+    await page.reload();
+    await expect(project).toContainText('Restart notifications');
+    await readQueue();
+    await expect(errors).toHaveCount(0);
+    expect(providerRequests).toBe(0);
+  });
+  for (const theme of ['light', 'dark']) {
+    test(`notification history table paginates and scrolls columns ${base} ${theme}`, async ({
+      page,
+      context,
+    }, testInfo) => {
+      const entries = Array.from({ length: 81 }, (_, index) => ({
+        id: `table-${index}`,
+        type: index === 80 ? 'error' : 'info',
+        message: `Notification ${index}`,
+        description: 'Background activity',
+        createdAt: 1800000000000 - index,
+        updatedAt: 1800000000000 - index,
+        read: false,
+        ...(index === 80
+          ? {
+              report: {
+                summary: 'Saved error',
+                text: 'Saved error\nError: test report',
+              },
+            }
+          : {}),
+      }));
+      await page.addInitScript((entries) => {
+        localStorage.setItem(
+          'localcut.notifications.v1',
+          JSON.stringify({ version: 1, entries }),
+        );
+      }, entries);
+      if (theme === 'dark')
+        await page.addInitScript(() =>
+          localStorage.setItem(
+            'localcut.appearance.v1',
+            JSON.stringify({
+              version: 1,
+              preferences: { mode: 'dark', base: 'slate' },
+            }),
+          ),
+        );
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.goto(base);
+      await createWorkspace(page);
+      const bell = page.getByRole('button', { name: /^Notifications/ });
+      await bell.click();
+      const log = page.getByRole('dialog', {
+        name: 'Notifications',
+        exact: true,
+      });
+      const rows = log.getByRole('row', { name: /^Notification \d/ });
+      const pages = log.getByRole('navigation', {
+        name: 'Notifications pages',
+      });
+      const region = log.getByRole('region', { name: 'Notifications columns' });
+      await expect(
+        log.getByRole('table', { name: 'Saved notifications' }),
+      ).toBeVisible();
+      await expect(rows).toHaveCount(10);
+      await expect(rows.first()).toHaveAttribute(
+        'aria-label',
+        'Notification 0',
+      );
+      await expect(pages.locator('[aria-current="page"]')).toHaveText('1');
+      await expect(pages.getByText('More pages')).toHaveCount(1);
+      await pages
+        .getByRole('button', { name: 'Go to page 2', exact: true })
+        .focus();
+      await page.keyboard.press('Enter');
+      await expect(rows.first()).toHaveAttribute(
+        'aria-label',
+        'Notification 10',
+      );
+      await pages.getByRole('button', { name: 'Go to next page' }).click();
+      await pages
+        .getByRole('button', { name: 'Go to page 4', exact: true })
+        .click();
+      await pages
+        .getByRole('button', { name: 'Go to page 5', exact: true })
+        .click();
+      await expect(pages.getByText('More pages')).toHaveCount(2);
+      await expect(rows.first()).toHaveAttribute(
+        'aria-label',
+        'Notification 40',
+      );
+      await page.screenshot({
+        path: testInfo.outputPath('notification-table-desktop.png'),
+      });
+      await page.setViewportSize({ width: 320, height: 480 });
+      await expect(
+        page.getByRole('navigation', { name: 'Workspace sections' }),
+      ).toBeVisible();
+      // The responsive header remounts its dialog trigger at the mobile boundary.
+      if (!(await log.isVisible())) await bell.click();
+      await pages
+        .getByRole('button', { name: 'Go to page 2', exact: true })
+        .click();
+      await pages.getByRole('button', { name: 'Go to next page' }).click();
+      await pages.getByRole('button', { name: 'Go to next page' }).click();
+      await pages.getByRole('button', { name: 'Go to next page' }).click();
+      const right = log.getByRole('button', {
+        name: 'Scroll one column right',
+      });
+      const left = log.getByRole('button', { name: 'Scroll one column left' });
+      const position = () => region.evaluate((element) => element.scrollLeft);
+      await expect(right).toBeVisible();
+      await expect(left).toHaveCount(0);
+      await expect(right).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(right.locator('..')).toHaveCSS(
+        'background-image',
+        /linear-gradient/,
+      );
+      const boundary = await region.evaluate((element) => {
+        const table = element.querySelector('table')!;
+        const scale =
+          element.clientWidth / element.getBoundingClientRect().width;
+        return (
+          (table.querySelectorAll('th')[1]!.getBoundingClientRect().left -
+            table.getBoundingClientRect().left) *
+          scale
+        );
+      });
+      await right.click();
+      await expect.poll(position).toBeCloseTo(boundary, 0);
+      await left.click();
+      await expect.poll(position).toBe(0);
+      await expect(left).toHaveCount(0);
+      // Removing the focused arrow schedules Base UI's popup focus on the next
+      // frame. Let that restoration finish before assigning keyboard ownership.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      await region.focus();
+      await expect(region).toBeFocused();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(position).toBeGreaterThan(0);
+      const bounds = (await pages.boundingBox())!;
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(480);
+      // Retain the workspace's 44 px mobile targets within at most two rows.
+      expect(bounds.height).toBeLessThanOrEqual(90);
+      await page.screenshot({
+        path: testInfo.outputPath('notification-table-mobile.png'),
+      });
+      await pages
+        .getByRole('button', { name: 'Go to page 9', exact: true })
+        .click();
+      await expect(rows).toHaveCount(1);
+      await expect(
+        pages.getByRole('button', { name: 'Go to next page' }),
+      ).toHaveCount(0);
+      await log
+        .getByRole('button', { name: 'View stack trace: Notification 80' })
+        .click();
+      const details = page.getByRole('dialog', {
+        name: 'Error details',
+        exact: true,
+      });
+      await expect(details.getByLabel('Full error report')).toContainText(
+        'Error: test report',
+      );
+      await details.getByRole('button', { name: 'Close', exact: true }).click();
+      await bell.click();
+      await expect(pages.locator('[aria-current="page"]')).toHaveText('1');
+      await pages
+        .getByRole('button', { name: 'Go to page 9', exact: true })
+        .click();
+      const other = await context.newPage();
+      await other.goto(base);
+      await other.evaluate(
+        (entries) =>
+          localStorage.setItem(
+            'localcut.notifications.v1',
+            JSON.stringify({ version: 1, entries }),
+          ),
+        entries.slice(0, 11),
+      );
+      await expect(pages.locator('[aria-current="page"]')).toHaveText('2');
+      await expect(rows).toHaveCount(1);
+      await other.evaluate(
+        (entries) =>
+          localStorage.setItem(
+            'localcut.notifications.v1',
+            JSON.stringify({ version: 1, entries }),
+          ),
+        entries,
+      );
+      await expect(rows).toHaveCount(10);
+      await expect(pages.locator('[aria-current="page"]')).toHaveText('2');
+      await log
+        .getByRole('button', { name: 'Clear history', exact: true })
+        .click();
+      await expect(log).toContainText('No notifications yet.');
+      await expect(pages).toHaveCount(0);
+      await other.close();
+    });
+  }
+
+  test(`error stack trace and persistent notification history ${base}`, async ({
+    page,
+    context,
+  }, testInfo) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(base);
+    const bell = page.getByRole('button', { name: /^Notifications/ });
+    await expect(bell.locator('[data-notification-unread]')).toHaveCount(0);
+    await bell.click();
+    const log = page.getByRole('dialog', {
+      name: 'Notifications',
+      exact: true,
+    });
+    await expect(log).toContainText('No notifications yet.');
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(bell).toBeFocused();
+    const id = await page.evaluate(async (base) => {
+      const { createEditor } = await import(base + 'editor.js');
+      const editor = await createEditor({ namespace: 'localcut' });
+      try {
+        return (await editor.projects.create('Diagnostic session')).id;
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    await navigateWorkspace(page, `${base}workspace/${id}`);
+    await expect(
+      page.getByRole('button', { name: 'Open project', exact: true }),
+    ).toContainText('Diagnostic session');
+    await importInvalidBackup(page);
+    const toast = page.locator('[data-sonner-toast][data-type="error"]').last();
+    await expect(toast).toContainText('Invalid project JSON');
+    await expect(bell.locator('[data-notification-unread]')).toBeVisible();
+    await toast
+      .getByRole('button', { name: 'View stack trace', exact: true })
+      .click();
+    const details = page.getByRole('dialog', {
+      name: 'Error details',
+      exact: true,
+    });
+    const report = details.getByLabel('Full error report');
+    await expect(
+      details.locator('[data-slot="dialog-description"]'),
+    ).toHaveCount(0);
+    await expect(details).not.toContainText('Stack trace and session data');
+    await expect(report.locator('code')).toBeVisible();
+    expect(
+      await report.evaluate((element) => getComputedStyle(element).whiteSpace),
+    ).toBe('pre');
+    await expect(report).toContainText('EditorError: Invalid project JSON');
+    await expect(report).toContainText(id);
+    await expect(report).toContainText('playheadUs');
+    await expect(report).toContainText('revision');
+    const build = JSON.parse(
+      readFileSync(
+        `${base === '/' ? 'dist-root' : 'dist'}/build-info.json`,
+        'utf8',
+      ),
+    ) as { commit: string };
+    await expect(report).toContainText(build.commit);
+    await expect(report).not.toContainText('invalid project backup');
+    const fullText = await report.textContent();
+    await details
+      .getByRole('button', { name: 'Copy error details', exact: true })
+      .click();
+    await expect(
+      details
+        .getByRole('button', { name: 'Copied error details', exact: true })
+        .locator('[data-copy-feedback="copied"]'),
+    ).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      fullText,
+    );
+    await expect(
+      details.getByRole('button', { name: 'Copy error details', exact: true }),
+    ).toBeVisible();
+    await page.evaluate(() =>
+      Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true,
+        value: async () => {
+          throw new Error('Clipboard denied');
+        },
+      }),
+    );
+    await details
+      .getByRole('button', { name: 'Copy error details', exact: true })
+      .click();
+    await expect(details.getByRole('alert')).toContainText('Could not copy');
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await dismissNotifications(page);
+    await expect(toast).toHaveCount(0);
+    await bell.click();
+    await expect(log).toContainText('Invalid project JSON');
+    await expect(bell.locator('[data-notification-unread]')).toHaveCount(0);
+    await log.getByRole('button', { name: /^View stack trace:/ }).click();
+    await expect(report).toHaveText(fullText!);
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(bell).toBeFocused();
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Open project', exact: true }),
+    ).toContainText('Diagnostic session');
+    await expect(
+      page.getByRole('button', { name: 'Undo', exact: true }),
+    ).toBeVisible();
+    await bell.click();
+    await expect(log).toContainText('Invalid project JSON');
+    await log.getByRole('button', { name: /^View stack trace:/ }).click();
+    await expect(report).toHaveText(fullText!);
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+s');
+    await expect(
+      page.locator('[data-sonner-toast][data-type="success"]'),
+    ).toContainText('Project saved');
+    await expect(bell.locator('[data-notification-unread]')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await bell.click();
+    await expect(log).toContainText('Project saved');
+    const bounds = (await log.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await page.screenshot({
+      path: testInfo.outputPath('notification-history-mobile.png'),
+    });
+    await log.getByRole('button', { name: /^View stack trace:/ }).click();
+    await expect(report).toHaveText(fullText!);
+    const detailBounds = (await details.boundingBox())!;
+    expect(detailBounds.x).toBeGreaterThanOrEqual(0);
+    expect(detailBounds.x + detailBounds.width).toBeLessThanOrEqual(390);
+    expect(
+      await report.evaluate(
+        (element) => element.scrollWidth > element.clientWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('error-details-mobile.png'),
+    });
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await bell.click();
+    await log
+      .getByRole('button', { name: 'Clear history', exact: true })
+      .click();
+    await expect(log).toContainText('No notifications yet.');
+    await page.reload();
+    await bell.click();
+    await expect(log).toContainText('No notifications yet.');
+  });
+  test(`notification history recovers denied storage and synchronizes tabs ${base}`, async ({
+    page,
+    context,
+  }) => {
+    await page.addInitScript(() => {
+      const original = Storage.prototype.setItem;
+      let blocked = true;
+      Storage.prototype.setItem = function (key, value) {
+        if (blocked && key === 'localcut.notifications.v1')
+          throw new DOMException('Storage denied', 'QuotaExceededError');
+        original.call(this, key, value);
+      };
+      Object.defineProperty(window, 'allowNotificationStorage', {
+        value: () => {
+          blocked = false;
+        },
+      });
+    });
+    await page.goto(base);
+    await importInvalidBackup(page);
+    const bell = page.getByRole('button', { name: /^Notifications/ });
+    await expect(bell.locator('[data-notification-unread]')).toBeVisible();
+    await bell.click();
+    const log = page.getByRole('dialog', {
+      name: 'Notifications',
+      exact: true,
+    });
+    await expect(log.getByRole('alert')).toContainText('could not be saved');
+    await log.getByRole('button', { name: /^View stack trace:/ }).click();
+    const details = page.getByRole('dialog', {
+      name: 'Error details',
+      exact: true,
+    });
+    await expect(details.getByLabel('Full error report')).toContainText(
+      'Invalid project JSON',
+    );
+    await details.getByRole('button', { name: 'Close', exact: true }).click();
+    await bell.click();
+    await page.evaluate(() =>
+      navigator.locks.request('localcut.notifications.v1', () => {}),
+    );
+    await page.evaluate(() =>
+      (
+        window as unknown as { allowNotificationStorage(): void }
+      ).allowNotificationStorage(),
+    );
+    await log
+      .getByRole('button', { name: 'Retry saving', exact: true })
+      .click();
+    await expect(log.getByRole('alert')).toHaveCount(0);
+    await log.getByRole('button', { name: 'Close', exact: true }).click();
+    const other = await context.newPage();
+    await other.goto(base);
+    const otherBell = other.getByRole('button', { name: /^Notifications/ });
+    await otherBell.click();
+    const otherLog = other.getByRole('dialog', {
+      name: 'Notifications',
+      exact: true,
+    });
+    await expect(otherLog).toContainText('Invalid project JSON');
+    await otherLog.getByRole('button', { name: 'Close', exact: true }).click();
+    await importInvalidBackup(page);
+    await expect(otherBell.locator('[data-notification-unread]')).toBeVisible();
+    await otherBell.click();
+    await expect(
+      otherLog.getByRole('button', { name: /^View stack trace:/ }),
+    ).toHaveCount(2);
+    await expect(bell.locator('[data-notification-unread]')).toHaveCount(0);
+    await otherLog
+      .getByRole('button', { name: 'Clear history', exact: true })
+      .click();
+    await bell.click();
+    await expect(log).toContainText('No notifications yet.');
+    await other.close();
+  });
+  test(`concurrent notification reports survive a shared write lock ${base}`, async ({
+    page,
+    context,
+  }) => {
+    const other = await context.newPage();
+    await Promise.all([page.goto(base), other.goto(base)]);
+    await page.evaluate(async () => {
+      let ready!: () => void, release!: () => void;
+      const started = new Promise<void>((resolve) => {
+        ready = resolve;
+      });
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      Object.defineProperty(window, 'releaseNotificationWriteLock', {
+        value: release,
+      });
+      void navigator.locks.request('localcut.notifications.v1', async () => {
+        ready();
+        await held;
+      });
+      await started;
+    });
+    await Promise.all([importInvalidBackup(page), importInvalidBackup(other)]);
+    await expect(
+      page.locator('[data-sonner-toast][data-type="error"]'),
+    ).toBeVisible();
+    await expect(
+      other.locator('[data-sonner-toast][data-type="error"]'),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('localcut.notifications.v1'),
+      ),
+    ).toBeNull();
+    await page.evaluate(() =>
+      (
+        window as unknown as { releaseNotificationWriteLock(): void }
+      ).releaseNotificationWriteLock(),
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(
+              localStorage.getItem('localcut.notifications.v1') ??
+                '{"entries":[]}',
+            ).entries.length,
+        ),
+      )
+      .toBe(2);
+    const records = await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('localcut.notifications.v1')!)
+          .entries as { report: { text: string } }[],
+    );
+    expect(
+      records.every((entry) =>
+        entry.report.text.includes('Invalid project JSON'),
+      ),
+    ).toBe(true);
+    await page.reload();
+    await page.getByRole('button', { name: /^Notifications/ }).click();
+    const log = page.getByRole('dialog', {
+      name: 'Notifications',
+      exact: true,
+    });
+    await expect(
+      log.getByRole('button', { name: /^View stack trace:/ }),
+    ).toHaveCount(2);
+    await other.close();
+  });
+}

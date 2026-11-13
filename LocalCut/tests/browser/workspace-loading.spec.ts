@@ -1,0 +1,398 @@
+import { navigateWorkspace } from './workspace-project-helper';
+import { behaviorBases } from './coverage-bases';
+import { expect, test } from '@playwright/test';
+
+for (const base of behaviorBases) {
+  test(`whiteboard loading skeleton stays regional and resolves after cold import ${base}`, async ({
+    page,
+  }, testInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'localcut.appearance.v1',
+        JSON.stringify({ version: 1, preferences: { mode: 'system' } }),
+      );
+    });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.goto(base);
+    const id = await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      try {
+        return (await editor.projects.create('Whiteboard loading')).id;
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${base}assets/Storyboard-*.js`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    try {
+      await navigateWorkspace(page, `${base}workspace/${id}`);
+      const storyboard = page.getByRole('tab', {
+        name: 'Storyboard',
+        exact: true,
+      });
+      const editor = page.getByRole('tab', { name: 'Editor', exact: true });
+      await storyboard.click();
+      const skeleton = page.getByRole('status', {
+        name: 'Loading storyboard',
+        exact: true,
+      });
+      await expect(skeleton).toBeVisible();
+      await expect(skeleton).toHaveAttribute('aria-busy', 'true');
+      await expect(
+        page.getByText('Loading storyboard…', { exact: true }),
+      ).toHaveCount(0);
+      const placeholder = skeleton.locator('.loading-placeholder').first();
+      await expect(placeholder).toHaveCSS('animation-name', 'none');
+      await expect(skeleton.getByRole('button')).toHaveCount(0);
+      const light = await skeleton.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+      await page.screenshot({
+        path: testInfo.outputPath('whiteboard-loading-light.png'),
+      });
+      await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+      await expect
+        .poll(() =>
+          skeleton.evaluate(
+            (element) => getComputedStyle(element).backgroundColor,
+          ),
+        )
+        .not.toBe(light);
+      await page.screenshot({
+        path: testInfo.outputPath('whiteboard-loading-dark.png'),
+      });
+      await editor.click();
+      await expect(skeleton).toBeHidden();
+      await expect(
+        page.getByRole('button', { name: 'Add text', exact: true }),
+      ).toBeVisible();
+      await storyboard.click();
+      await expect(skeleton).toBeVisible();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(skeleton).toBeVisible();
+      const toolbar = skeleton.locator('.storyboard-skeleton-toolbar');
+      const surface = await skeleton.boundingBox();
+      const bar = await toolbar.boundingBox();
+      expect(bar!.x).toBeGreaterThanOrEqual(surface!.x);
+      expect(bar!.x + bar!.width).toBeLessThanOrEqual(
+        surface!.x + surface!.width,
+      );
+      await expect(skeleton.locator('.storyboard-skeleton-zoom')).toBeHidden();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath('whiteboard-loading-mobile.png'),
+      });
+      await page.emulateMedia({
+        reducedMotion: 'no-preference',
+        colorScheme: 'dark',
+      });
+      await expect(placeholder).toHaveCSS('animation-name', 'loading-breathe');
+      release();
+      await expect(
+        page.locator('.storyboard canvas.interactive'),
+      ).toBeVisible();
+      await expect(skeleton).toHaveCount(0);
+      await expect(
+        page.getByRole('group', { name: 'Project history' }),
+      ).toBeVisible();
+    } finally {
+      release();
+    }
+  });
+
+  test(`cached projects render during refresh and reconcile current storage ${base}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(base);
+    const ids = await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      try {
+        const keep = await editor.projects.create('Keep film');
+        const remove = await editor.projects.create('Removed film');
+        return { keep: keep.id, remove: remove.id };
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    await page
+      .getByRole('button', { name: 'Refresh projects', exact: true })
+      .click();
+    const browser = page.getByRole('main', { name: 'Projects', exact: true });
+    await expect(
+      browser.getByRole('button', { name: /^Removed film/ }),
+    ).toBeEnabled();
+    const cached = await page.evaluate(() =>
+      localStorage.getItem('localcut.project-catalog.v1'),
+    );
+    await page.evaluate(
+      async ({ base, ids }) => {
+        const { createEditor } = await import(`${base}editor.js`);
+        const editor = await createEditor();
+        try {
+          await editor.projects.delete(ids.remove);
+          await editor.projects.create('Fresh film');
+        } finally {
+          await editor.dispose();
+        }
+      },
+      { base, ids },
+    );
+    await expect(
+      browser.getByRole('button', { name: /^Fresh film/ }),
+    ).toBeVisible();
+    await page.evaluate(
+      (cached) => localStorage.setItem('localcut.project-catalog.v1', cached!),
+      cached,
+    );
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${base}assets/editor-*.js`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(
+      browser.getByRole('button', { name: /^Removed film/ }),
+    ).toBeEnabled();
+    await expect(browser).toHaveAttribute('aria-busy', 'true');
+    await browser
+      .getByRole('textbox', { name: 'Search projects' })
+      .fill('film');
+    await expect(browser.getByRole('listitem')).toHaveCount(2);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: testInfo.outputPath('cached-projects-refresh.png'),
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    release();
+    await expect(
+      browser.getByRole('button', { name: /^Fresh film/ }),
+    ).toBeEnabled();
+    await expect(
+      browser.getByRole('button', { name: /^Removed film/ }),
+    ).toHaveCount(0);
+    await expect(
+      browser.getByRole('textbox', { name: 'Search projects' }),
+    ).toHaveValue('film');
+    await expect(browser).toHaveAttribute('aria-busy', 'false');
+    await browser.getByRole('button', { name: /^Keep film/ }).click();
+    await expect(
+      page.getByRole('button', { name: 'Open project', exact: true }),
+    ).toContainText('Keep film');
+    expect(new URL(page.url()).pathname).toContain(ids.keep);
+  });
+
+  test(`loading skeletons and cached failure retry remain usable ${base}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(base);
+    await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      await editor.dispose();
+    }, base);
+    await page.evaluate(() =>
+      localStorage.removeItem('localcut.project-catalog.v1'),
+    );
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${base}assets/editor-*.js`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(base);
+    const browser = page.getByRole('main', { name: 'Projects', exact: true });
+    const skeleton = browser.locator('.project-list-skeleton');
+    await expect(skeleton).toBeVisible();
+    expect(
+      await skeleton
+        .locator('.loading-placeholder')
+        .first()
+        .evaluate((element) => getComputedStyle(element).animationName),
+    ).toBe('none');
+    await page.screenshot({
+      path: testInfo.outputPath('cold-projects-skeleton.png'),
+      fullPage: true,
+    });
+    release();
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+    await page.unroute(`**${base}assets/editor-*.js`);
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'localcut.project-catalog.v1',
+        JSON.stringify({
+          version: 1,
+          projects: [
+            {
+              id: 'missing-cached-id',
+              name: 'Cached film',
+              clipCount: 3,
+              durationUs: 5000000,
+            },
+          ],
+        }),
+      ),
+    );
+    await page.addInitScript(() => {
+      const open = indexedDB.open.bind(indexedDB);
+      let first = true;
+      indexedDB.open = ((...args: Parameters<typeof indexedDB.open>) => {
+        if (first) {
+          first = false;
+          throw new Error('Storage temporarily unavailable');
+        }
+        return open(...args);
+      }) as typeof indexedDB.open;
+    });
+    await page.reload();
+    await expect(page.locator('[data-sonner-toast]')).toContainText(
+      'Storage temporarily unavailable',
+    );
+    await expect(
+      browser.getByRole('button', { name: /^Cached film/ }),
+    ).toBeEnabled();
+    await expect(browser).toHaveAttribute('aria-busy', 'false');
+    await browser.getByRole('button', { name: 'Refresh projects' }).click();
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      browser.getByRole('button', { name: /^Cached film/ }),
+    ).toHaveCount(0);
+    // A stale cached ID can never become an editable project.
+    await page.goto(`${base}#/project/missing-cached-id`);
+    await expect(page.getByRole('alert')).toContainText(
+      'unavailable in this browser',
+    );
+    await page.getByRole('button', { name: 'Open saved projects' }).click();
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+  });
+}
+
+for (const base of behaviorBases) {
+  test(`cached project navigation supersedes active project restoration ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    const ids = await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      try {
+        return {
+          first: (await editor.projects.create('First cached film')).id,
+          second: (await editor.projects.create('Second cached film')).id,
+        };
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    await page
+      .getByRole('button', { name: 'Refresh projects', exact: true })
+      .click();
+    const browser = page.getByRole('main', { name: 'Projects', exact: true });
+    await expect(
+      browser.getByRole('button', { name: /^Second cached film/ }),
+    ).toBeEnabled();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${base}assets/editor-*.js`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(`${base}?restoring#/projects?project=${ids.first}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    try {
+      await expect(
+        browser.getByRole('button', { name: /^First cached film/ }),
+      ).toBeEnabled();
+      await expect(
+        browser.getByRole('button', { name: /^Second cached film/ }),
+      ).toBeEnabled();
+      await browser
+        .getByRole('button', { name: /^Second cached film/ })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`/workspace/${ids.second}$`));
+      release();
+      await expect(
+        page.getByRole('button', { name: 'Open project', exact: true }),
+      ).toContainText('Second cached film');
+      await expect(
+        page.getByRole('status', { name: 'Opening project', exact: true }),
+      ).toHaveCount(0);
+    } finally {
+      release();
+    }
+  });
+
+  test(`media trigger retains keyboard focus when its tooltip loads ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    const id = await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      try {
+        return (await editor.projects.create('Media focus')).id;
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/tooltip-[^/]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(`${base}workspace/${id}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const trigger = page.getByRole('button', {
+      name: 'Expand media',
+      exact: true,
+    });
+    try {
+      await expect(trigger).toBeVisible();
+      await trigger.focus();
+      await expect(trigger).toBeFocused();
+      release();
+      await expect(trigger).toHaveAttribute('data-base-ui-tooltip-trigger');
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(
+        page.getByRole('button', { name: 'Collapse media', exact: true }),
+      ).toBeFocused();
+    } finally {
+      release();
+    }
+  });
+}

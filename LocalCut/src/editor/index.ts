@@ -1,0 +1,1488 @@
+import { storyboardImageOptionsSchema } from '../core/storyboard-image';
+import type { StoryboardImageOptions } from '../core/storyboard-image';
+export type { StoryboardImageOptions } from '../core/storyboard-image';
+export type {
+  Storyboard,
+  StoryboardElement,
+  StoryboardPatch,
+} from '../core/storyboard';
+import { storyboardStoreOptionsSchema } from '../core/storyboard-export';
+import type {
+  StoryboardExportOptions,
+  StoryboardStoreOptions,
+} from '../core/storyboard-export';
+import type {
+  StoryboardExportResult,
+  StoryboardAssetResult,
+} from '../services/storyboard-render';
+export type {
+  StoryboardExportOptions,
+  StoryboardStoreOptions,
+} from '../core/storyboard-export';
+export type {
+  StoryboardExportResult,
+  StoryboardAssetResult,
+} from '../services/storyboard-render';
+import { sourceIdentity } from '../storage/thumbnail-cache';
+import { maskSchema } from '../core/effects';
+import type { Mask } from '../core/effects';
+import { Store } from '../storage/store';
+import { MediaLibraryStore } from '../storage/media-library';
+import type { CodingOperation, CodingQuery } from '../core/coding';
+import type { LibraryOperation } from '../core/media-library';
+export type {
+  LibraryEntry,
+  LibrarySnapshot,
+  LibraryOperation,
+} from '../core/media-library';
+import { mediaTaskCache } from '../storage/media-cache';
+import { freshTask, taskCacheKey } from '../services/task-cache';
+import type { TaskCachePolicy } from '../services/task-cache';
+import { AssetIndexStore } from '../storage/asset-index';
+import type {
+  AssetIndexRun,
+  IndexLabel,
+  IndexRequestManifest,
+} from '../core/asset-index';
+export type * from '../core/asset-index';
+import { Autosave } from '../services/autosave';
+export type { ProjectVersion, ProjectVersionInfo } from '../storage/store';
+import { Jobs, checkAbort } from '../services/jobs';
+import { TaskQueue, runQueuedJob, taskTerminal } from '../services/task-queue';
+import type { TaskHandler, TaskContext } from '../services/task-queue';
+export { TaskQueue } from '../services/task-queue';
+export { freshTask, pureTaskCache, taskCacheKey } from '../services/task-cache';
+export type { TaskCachePolicy, CacheHit } from '../services/task-cache';
+export type {
+  TaskRecord,
+  TaskState,
+  TaskContext,
+  TaskHandler,
+  TaskQueueError,
+} from '../services/task-queue';
+import type { JobEvent } from '../services/jobs';
+import { WorkerClient } from '../services/worker-client';
+import { EditorError, invariant, asEditorError } from '../core/errors';
+import { newProject, validateProject } from '../core/model';
+import { outputAssetIds } from '../core/timeline';
+import type { Asset, Project } from '../core/model';
+import { validateAssetClips } from '../core/asset-clips';
+import type { AssetClip } from '../core/asset-clips';
+export { assetClipState } from '../core/asset-clips';
+export type { AssetClip, AssetTranscriptCue } from '../core/asset-clips';
+import { applyOperations, parseBatch } from '../core/commands';
+import { repairLegacyIdentities } from '../core/legacy-identities';
+import type { CommandBatch } from '../core/commands';
+import type { ExportOptions, ExportResult } from '../media/export';
+import { createPreviewSession } from '../services/preview';
+import type { FrameResult, PreviewSession } from '../services/preview';
+export * from '../core/model';
+export { rampPreset, averageSpeed, sourceDurationUs } from '../core/speed';
+export type { SpeedPoint, SpeedRamp } from '../core/speed';
+export { TEXT_FONTS, TEXT_TEMPLATES } from '../core/text-library';
+export { COLOR_PRESETS, BLEND_MODES, parseCube } from '../core/effects';
+export type {
+  FontId,
+  TextTemplate,
+  TextStyleInput,
+} from '../core/text-library';
+export type {
+  CommandBatch,
+  EditOperation,
+  EditReceipt,
+} from '../core/commands';
+export { importCaptions, exportCaptions } from '../core/captions';
+export {
+  retimeSpeechTranscript,
+  padSpeechTranscript,
+} from '../core/transcript-timing';
+export { EditorError } from '../core/errors';
+export type { Job, JobEvent, Progress } from '../services/jobs';
+export type { ExportOptions, ExportResult } from '../media/export';
+export type { PreviewSession, FrameResult } from '../services/preview';
+export { readWorkspaceArchive } from '../storage/workspace-transfer';
+export type {
+  WorkspaceArchive,
+  WorkspaceBackup,
+  WorkspaceSelection,
+  WorkspaceSettings,
+} from '../storage/workspace-transfer';
+import type {
+  WorkspaceArchive,
+  WorkspaceSelection,
+  WorkspaceSettings,
+} from '../storage/workspace-transfer';
+export interface EditorOptions {
+  namespace?: string;
+}
+export interface ProjectImportOptions {
+  repairLegacyIdentities?: boolean;
+}
+export interface VersionEvent {
+  projectId: string;
+  error?: unknown;
+}
+export interface ProjectEvent {
+  projectId: string;
+  revision?: number;
+  type: 'changed' | 'deleted';
+}
+export async function createEditor(options: EditorOptions = {}) {
+  const namespace = options.namespace ?? 'localcut';
+  // Retire only this editor's obsolete model bytes. Cache access can be disabled;
+  // cleanup failure must not prevent opening authored projects.
+  try {
+    await globalThis.caches?.delete(`${namespace}-asr-v1`);
+  } catch {
+    /* Browser storage policy may deny Cache Storage. */
+  }
+  const store = await Store.open(namespace),
+    jobs = new Jobs(),
+    tasks = new TaskQueue(namespace);
+  let disposed = false;
+  const libraryStores = new Map<string, Promise<MediaLibraryStore>>();
+  const libraryBroadcast = new BroadcastChannel(`${namespace}-media-library`);
+  const libraryListeners = new Map<string, Set<() => void>>();
+  const libraryChanged = (projectId: string) => {
+    for (const listener of libraryListeners.get(projectId) ?? []) {
+      try {
+        listener();
+      } catch {
+        /* Consumer isolation. */
+      }
+    }
+  };
+  libraryBroadcast.onmessage = (event: MessageEvent<unknown>) => {
+    if (typeof event.data === 'string') libraryChanged(event.data);
+  };
+  const library = (projectId: string) => {
+    active();
+    let pending = libraryStores.get(projectId);
+    if (!pending) {
+      pending = MediaLibraryStore.open(store, projectId).catch((error) => {
+        libraryStores.delete(projectId);
+        throw error;
+      });
+      libraryStores.set(projectId, pending);
+    }
+    return pending;
+  };
+  const boundLibrary = (projectId: string) => {
+    const changed = () => {
+      if (!disposed) {
+        libraryChanged(projectId);
+        libraryBroadcast.postMessage(projectId);
+      }
+    };
+    return {
+      async list() {
+        return (await library(projectId)).list();
+      },
+      async apply(operation: LibraryOperation, expectedRevision: number) {
+        const result = await (
+          await library(projectId)
+        ).apply(operation, expectedRevision);
+        changed();
+        return result;
+      },
+      async place(
+        assetId: string | null,
+        directories: string[],
+        parentId: string | null = null,
+      ) {
+        const result = await (
+          await library(projectId)
+        ).place(assetId, directories, parentId);
+        changed();
+        return result;
+      },
+      async download(entryId: string) {
+        return (await library(projectId)).download(entryId);
+      },
+      async file(entryId: string) {
+        return (await library(projectId)).file(entryId);
+      },
+      subscribe(listener: () => void) {
+        active();
+        let listeners = libraryListeners.get(projectId);
+        if (!listeners)
+          libraryListeners.set(projectId, (listeners = new Set()));
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    };
+  };
+  const sessions = new Set<PreviewSession>();
+  const assetListeners = new Set<(assetId: string) => void>();
+  const assetBroadcast = new BroadcastChannel(`${namespace}-asset-metadata`);
+  const assetChanged = (assetId: string) => {
+    for (const listener of assetListeners) {
+      try {
+        listener(assetId);
+      } catch {
+        /* Consumer isolation. */
+      }
+    }
+  };
+  assetBroadcast.onmessage = (event: MessageEvent<unknown>) => {
+    if (typeof event.data === 'string') assetChanged(event.data);
+  };
+  const projectListeners = new Set<(event: ProjectEvent) => void>();
+  const versionListeners = new Set<(event: VersionEvent) => void>();
+  const versionNotify = (event: VersionEvent) => {
+    for (const listener of versionListeners) {
+      try {
+        listener(event);
+      } catch {
+        /* Consumer isolation. */
+      }
+    }
+  };
+  const autosave = new Autosave(
+    async (id) => {
+      await store.saveVersion(id);
+      versionNotify({ projectId: id });
+    },
+    (projectId, error) => versionNotify({ projectId, error }),
+  );
+  const broadcast = new BroadcastChannel(`${namespace}-projects`);
+  const interactive = new WorkerClient(
+    () =>
+      new Worker(new URL('../workers/media.worker.ts', import.meta.url), {
+        type: 'module',
+      }),
+  );
+  const background = new WorkerClient(
+    () =>
+      new Worker(new URL('../workers/media.worker.ts', import.meta.url), {
+        type: 'module',
+      }),
+  );
+  const indexing = new WorkerClient(
+    () =>
+      new Worker(new URL('../workers/media.worker.ts', import.meta.url), {
+        type: 'module',
+      }),
+  );
+  const withIndexStore = async <T>(
+    work: (index: AssetIndexStore) => Promise<T>,
+  ) => {
+    active();
+    let index: AssetIndexStore | undefined;
+    try {
+      index = await AssetIndexStore.open(namespace);
+      active();
+      return await work(index);
+    } catch (error) {
+      throw asEditorError(error);
+    } finally {
+      index?.close();
+    }
+  };
+  const active = () => {
+    invariant(!disposed, 'DISPOSED', 'Editor disposed');
+  };
+  const notify = (event: ProjectEvent, send = true) => {
+    if (event.type === 'deleted') autosave.cancel(event.projectId);
+    else autosave.schedule(event.projectId);
+    for (const listener of projectListeners) {
+      try {
+        listener(event);
+      } catch {
+        /* Consumer isolation. */
+      }
+    }
+    if (send) broadcast.postMessage(event);
+  };
+  broadcast.onmessage = ({ data }: MessageEvent<ProjectEvent>) =>
+    notify(data, false);
+  const run = <T>(client: WorkerClient, operation: string, payload: object) => {
+    active();
+    return jobs.start<T>(
+      (signal, progress, jobId) =>
+        client.run(
+          operation,
+          { ...payload, namespace, jobId },
+          signal,
+          progress,
+        ),
+      { acceptCommittedResult: operation === 'import' },
+    );
+  };
+  const queuedRawJobs = new Set<string>();
+  const adoptQueuedJob = <T>(
+    job: import('../services/jobs').Job<T>,
+    context: TaskContext,
+  ) => {
+    queuedRawJobs.add(job.id);
+    return runQueuedJob(job, context).finally(() =>
+      queuedRawJobs.delete(job.id),
+    );
+  };
+  const api = {
+    tasks,
+    coding: {
+      async inspect(projectId: string) {
+        active();
+        await store.getProject(projectId);
+        const { inspectCoding } = await import('../services/coding');
+        return inspectCoding(namespace, projectId);
+      },
+      query(projectId: string, query: CodingQuery) {
+        active();
+        return jobs.start(async (signal, progress) => {
+          await store.getProject(projectId);
+          const { executeCoding } = await import('../services/coding');
+          return executeCoding(
+            namespace,
+            projectId,
+            query,
+            undefined,
+            signal,
+            progress,
+          );
+        });
+      },
+      run(
+        projectId: string,
+        operation: Exclude<CodingOperation, { type: 'import_workspace_file' }>,
+        expectedRevision: number,
+      ) {
+        active();
+        return jobs.start(
+          async (signal, progress) => {
+            await store.getProject(projectId);
+            const { executeCoding } = await import('../services/coding');
+            return executeCoding(
+              namespace,
+              projectId,
+              operation,
+              expectedRevision,
+              signal,
+              progress,
+            );
+          },
+          { acceptCommittedResult: true },
+        );
+      },
+      async file(projectId: string, path: string) {
+        active();
+        await store.getProject(projectId);
+        const { codingFile } = await import('../services/coding');
+        return codingFile(namespace, projectId, path);
+      },
+      importFile(
+        projectId: string,
+        path: string,
+        expectedRevision: number,
+        name?: string,
+      ) {
+        active();
+        return jobs.start(
+          async (signal, progress) => {
+            await store.getProject(projectId);
+            const { codingFile } = await import('../services/coding');
+            const file = await codingFile(
+              namespace,
+              projectId,
+              path,
+              expectedRevision,
+            );
+            checkAbort(signal);
+            const job = api.assets.import(file, name ?? file.name);
+            const abort = () => job.cancel();
+            signal.addEventListener('abort', abort, { once: true });
+            if (signal.aborted) abort();
+            progress({ stage: 'Importing generated Media' });
+            let asset: Asset;
+            try {
+              asset = await job.completion;
+            } finally {
+              signal.removeEventListener('abort', abort);
+            }
+            const placed = await boundLibrary(projectId).place(asset.id, []);
+            return {
+              projectId,
+              assetId: asset.id,
+              libraryRevision: placed.revision,
+            };
+          },
+          { acceptCommittedResult: true },
+        );
+      },
+    },
+    storyboard: {
+      async files(project: Project, signal = new AbortController().signal) {
+        active();
+        const { storyboardFiles } =
+          await import('../services/storyboard-images');
+        return storyboardFiles(
+          store,
+          project.storyboard ?? { elements: [], backgroundColor: '#ffffff' },
+          signal,
+        );
+      },
+      insertImage(
+        projectId: string,
+        input: StoryboardImageOptions,
+        expectedRevision: number,
+        requestId: string = crypto.randomUUID(),
+      ) {
+        active();
+        return jobs.start(
+          async (signal, progress) => {
+            const options = storyboardImageOptionsSchema.parse(input);
+            const project = await store.getProject(projectId);
+            invariant(
+              project.revision === expectedRevision,
+              'REVISION_CONFLICT',
+              'Storyboard changed before image insertion',
+            );
+            invariant(
+              !project.storyboard?.elements.some(
+                (e) => e.id === options.elementId,
+              ),
+              'INVALID_COMMAND',
+              'Choose a new image element ID',
+            );
+            invariant(
+              options.frameId === null ||
+                project.storyboard?.elements.some(
+                  (e) =>
+                    e.id === options.frameId &&
+                    e.type === 'frame' &&
+                    !e.isDeleted,
+                ),
+              'INVALID_COMMAND',
+              'Select an existing storyboard frame',
+            );
+            const asset = await store.getAsset(options.assetId);
+            invariant(
+              asset.status === 'ready' &&
+                ['image', 'video'].includes(asset.kind),
+              'INVALID_COMMAND',
+              'Select a ready image or video',
+            );
+            invariant(
+              asset.kind === 'image'
+                ? options.timeUs === 0
+                : options.timeUs < asset.durationUs,
+              'INVALID_COMMAND',
+              'Choose a source timestamp inside the video',
+            );
+            checkAbort(signal);
+            const wait = async <T>(job: import('../services/jobs').Job<T>) => {
+              const cancel = () => job.cancel();
+              signal.addEventListener('abort', cancel, { once: true });
+              if (signal.aborted) cancel();
+              try {
+                return await job.completion;
+              } finally {
+                signal.removeEventListener('abort', cancel);
+              }
+            };
+            progress({ stage: 'Preparing storyboard image' });
+            const pixels =
+              asset.kind === 'image'
+                ? await store.lock(
+                    `asset:${asset.id}`,
+                    'shared',
+                    async () =>
+                      new Blob(
+                        [await (await store.file(asset.id)).arrayBuffer()],
+                        { type: asset.type },
+                      ),
+                    signal,
+                  )
+                : (
+                    await wait(
+                      api.assets.thumbnails(
+                        asset.id,
+                        [options.timeUs],
+                        Math.ceil(options.width),
+                      ),
+                    )
+                  )[0]!.blob;
+            checkAbort(signal);
+            const bitmap = await createImageBitmap(pixels);
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            let png: Blob;
+            try {
+              canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+              png = await canvas.convertToBlob({ type: 'image/png' });
+            } finally {
+              bitmap.close();
+              canvas.width = canvas.height = 0;
+            }
+            checkAbort(signal);
+            const image = await wait(
+              api.assets.import(png, 'Storyboard image.png'),
+            );
+            // Imports are durable, even when a later board commit conflicts or is cancelled.
+            await boundLibrary(projectId).place(image.id, [], null);
+            checkAbort(signal);
+            const receipt = await api.commands.apply({
+              projectId,
+              requestId,
+              expectedRevision,
+              operations: [
+                {
+                  type: 'upsertStoryboardElements',
+                  elements: [
+                    {
+                      id: options.elementId,
+                      type: 'image',
+                      fileId: image.id,
+                      status: 'saved',
+                      scale: [1, 1],
+                      crop: null,
+                      x: options.x,
+                      y: options.y,
+                      width: options.width,
+                      height:
+                        options.height ??
+                        (options.width * image.height!) / image.width!,
+                      frameId: options.frameId,
+                    },
+                  ],
+                },
+              ],
+            });
+            return {
+              projectId,
+              revision: receipt.appliedRevision,
+              assetId: image.id,
+              elementId: options.elementId,
+              receipt,
+            };
+          },
+          { acceptCommittedResult: true },
+        );
+      },
+      export(
+        projectId: string,
+        options: StoryboardExportOptions,
+        expectedRevision: number,
+      ) {
+        active();
+        return jobs.start<StoryboardExportResult>(async (signal, progress) => {
+          const project = await store.getProject(projectId);
+          invariant(
+            project.revision === expectedRevision,
+            'REVISION_CONFLICT',
+            'Storyboard changed before export',
+          );
+          checkAbort(signal);
+          progress({ stage: 'Rendering storyboard' });
+          const { renderStoryboard } =
+            await import('../services/storyboard-render');
+          return renderStoryboard(store, project, options, signal);
+        });
+      },
+      store(
+        projectId: string,
+        input: StoryboardStoreOptions,
+        expectedRevision: number,
+      ) {
+        active();
+        return jobs.start<StoryboardAssetResult>(
+          async (signal, progress) => {
+            const options = storyboardStoreOptionsSchema.parse(input);
+            const project = await store.getProject(projectId);
+            invariant(
+              project.revision === expectedRevision,
+              'REVISION_CONFLICT',
+              'Storyboard changed before storing',
+            );
+            const media = boundLibrary(projectId);
+            const snapshot = await media.list();
+            invariant(
+              options.parentId === null ||
+                snapshot.entries.some(
+                  (e) =>
+                    e.id === options.parentId &&
+                    e.kind === 'folder' &&
+                    !e.trashed,
+                ),
+              'INVALID_COMMAND',
+              'Select an active project Media folder',
+            );
+            checkAbort(signal);
+            progress({ stage: 'Rendering storyboard' });
+            const { renderStoryboard } =
+              await import('../services/storyboard-render');
+            const { parentId, ...renderOptions } = options;
+            const rendered = await renderStoryboard(
+              store,
+              project,
+              renderOptions,
+              signal,
+            );
+            invariant(
+              (await store.getProject(projectId)).revision === expectedRevision,
+              'REVISION_CONFLICT',
+              'Storyboard changed while rendering. Retry from the current revision',
+            );
+            checkAbort(signal);
+            progress({ stage: 'Storing in Media' });
+            const imported = run<Asset>(background, 'import', {
+              file: rendered.file,
+              name: rendered.file.name,
+            });
+            const cancel = () => imported.cancel();
+            signal.addEventListener('abort', cancel, { once: true });
+            if (signal.aborted) cancel();
+            let asset: Asset;
+            try {
+              asset = await imported.completion;
+            } finally {
+              signal.removeEventListener('abort', cancel);
+            }
+            // A committed original survives late cancellation. Finish its named
+            // library publication and report the durable asset rather than retrying.
+            const placed = await media.place(asset.id, [], parentId);
+            const entry = placed.entries.find((e) => e.assetId === asset.id)!;
+            return {
+              projectId,
+              revision: expectedRevision,
+              assetId: asset.id,
+              entryId: entry.id,
+              libraryRevision: placed.revision,
+            };
+          },
+          { acceptCommittedResult: true },
+        );
+      },
+    },
+    masks: {
+      track(
+        projectId: string,
+        clipId: string,
+        expectedRevision: number,
+        mask?: Mask,
+      ) {
+        active();
+        return jobs.start(async (signal, progress, id) => {
+          const project = await store.getProject(projectId);
+          invariant(
+            project.revision === expectedRevision,
+            'REVISION_CONFLICT',
+            'Project changed before mask tracking',
+          );
+          if (mask) {
+            const clip = project.tracks
+              .flatMap((t) => t.clips)
+              .find((c) => c.id === clipId);
+            invariant(clip, 'INVALID_DOCUMENT', 'Unknown tracking clip');
+            clip.mask = maskSchema.parse(mask);
+          }
+          return background.run<
+            import('../media/mask-tracking').MaskTrackingResult
+          >(
+            'trackMask',
+            { namespace, jobId: id, project, clipId },
+            signal,
+            progress,
+          );
+        });
+      },
+    },
+    workspace: {
+      async snapshot(
+        projectIds: string[],
+        includeVersions = true,
+        settings?: WorkspaceSettings,
+      ) {
+        active();
+        const { snapshotWorkspace } =
+          await import('../storage/workspace-transfer');
+        return snapshotWorkspace(store, projectIds, includeVersions, settings);
+      },
+      export(selection: WorkspaceSelection, settings?: WorkspaceSettings) {
+        active();
+        return jobs.start(async (signal, progress) => {
+          const { exportWorkspace } =
+            await import('../storage/workspace-transfer');
+          return exportWorkspace(store, selection, settings, signal, progress);
+        });
+      },
+      import(archive: WorkspaceArchive, selection: WorkspaceSelection) {
+        active();
+        return jobs.start(
+          async (signal, progress) => {
+            const { restoreWorkspace } =
+              await import('../storage/workspace-transfer');
+            const projects = await restoreWorkspace(
+              store,
+              archive,
+              selection,
+              signal,
+              progress,
+            );
+            for (const project of projects)
+              notify({
+                projectId: project.id,
+                revision: project.revision,
+                type: 'changed',
+              });
+            return projects;
+          },
+          { acceptCommittedResult: true },
+        );
+      },
+    },
+    projects: {
+      async create(
+        name: string,
+        settings: Partial<Pick<Project, 'width' | 'height' | 'frameRate'>> = {},
+      ) {
+        active();
+        const p = await store.create(newProject(name, settings));
+        notify({ projectId: p.id, revision: p.revision, type: 'changed' });
+        return p;
+      },
+      async catalog() {
+        active();
+        return store.catalog();
+      },
+      async updateCatalog(
+        id: string,
+        expectedRevision: number,
+        patch: import('../storage/store').ProjectCatalogPatch,
+      ) {
+        active();
+        const entry = await store.updateCatalog(id, expectedRevision, patch);
+        notify({
+          projectId: id,
+          revision: entry.project.revision,
+          type: 'changed',
+        });
+        return entry;
+      },
+      async list() {
+        active();
+        return store.list();
+      },
+      async open(id: string) {
+        active();
+        const project = await store.getProject(id);
+        await autosave.flush(id);
+        return project;
+      },
+      async snapshot(id: string) {
+        active();
+        return store.getProject(id);
+      },
+      versions: {
+        async list(projectId: string) {
+          active();
+          return store.versions(projectId);
+        },
+        async snapshot(projectId: string, versionId: string) {
+          active();
+          return store.version(projectId, versionId);
+        },
+        async save(projectId: string) {
+          active();
+          await autosave.flush(projectId);
+        },
+        async restore(
+          projectId: string,
+          versionId: string,
+          requestId: string,
+          expectedRevision: number,
+        ) {
+          active();
+          const receipt = await store.restoreVersion(
+            projectId,
+            versionId,
+            requestId,
+            expectedRevision,
+          );
+          notify({
+            projectId,
+            revision: receipt.appliedRevision,
+            type: 'changed',
+          });
+          versionNotify({ projectId });
+          return receipt;
+        },
+      },
+      async delete(id: string) {
+        active();
+        await store.deleteProject(id);
+        notify({ projectId: id, type: 'deleted' });
+      },
+      async exportJSON(id: string) {
+        active();
+        return JSON.stringify(await store.backup(id), null, 2);
+      },
+      async importJSON(text: string, options: ProjectImportOptions = {}) {
+        active();
+        invariant(
+          options !== null &&
+            typeof options === 'object' &&
+            Object.keys(options).every(
+              (key) => key === 'repairLegacyIdentities',
+            ) &&
+            (options.repairLegacyIdentities === undefined ||
+              typeof options.repairLegacyIdentities === 'boolean'),
+          'INVALID_DOCUMENT',
+          'Invalid project import options',
+        );
+        let value: unknown;
+        try {
+          value = JSON.parse(text);
+        } catch {
+          throw new EditorError('INVALID_DOCUMENT', 'Invalid project JSON');
+        }
+        let p: Project;
+        if (value && typeof value === 'object' && 'backupVersion' in value)
+          p = await store.restore(value, options.repairLegacyIdentities);
+        else {
+          if (options.repairLegacyIdentities)
+            value = repairLegacyIdentities([value])[0];
+          p = validateProject(value);
+          p.id = crypto.randomUUID();
+          p.revision = 0;
+          p = await store.create(p);
+        }
+        notify({ projectId: p.id, revision: p.revision, type: 'changed' });
+        return p;
+      },
+    },
+    library: { forProject: boundLibrary },
+    assets: {
+      analyze(assetId: string, indexRunId?: string) {
+        return run<AssetIndexRun>(indexing, 'analyzeAsset', {
+          assetId,
+          indexRunId,
+        });
+      },
+      indexes: {
+        list(assetId?: string) {
+          return withIndexStore((index) => index.list(assetId));
+        },
+        get(runId: string) {
+          return withIndexStore((index) => index.get(runId));
+        },
+        artifact(runId: string, artifactId: string) {
+          return withIndexStore((index) => index.artifact(runId, artifactId));
+        },
+        remove(runId: string) {
+          return withIndexStore((index) => index.remove(runId));
+        },
+        withRun<T>(runId: string, work: () => Promise<T>, signal: AbortSignal) {
+          return withIndexStore((index) => index.active(runId, work, signal));
+        },
+        recordRequest(
+          runId: string,
+          manifest: IndexRequestManifest,
+          signal: AbortSignal,
+        ) {
+          return withIndexStore((index) =>
+            index.request(runId, manifest, signal),
+          );
+        },
+        recordResponse(
+          runId: string,
+          requestId: string,
+          response: string,
+          label: IndexLabel | undefined,
+          sceneId: string | undefined,
+          model: string | undefined,
+          usage: IndexRequestManifest['usage'],
+          signal: AbortSignal,
+        ) {
+          return withIndexStore(async (index) => {
+            const run = await index.get(runId),
+              asset = await store.getAsset(run.assetId),
+              file = await store.file(run.assetId);
+            invariant(
+              asset.status === 'ready' &&
+                file.lastModified === run.source.lastModified &&
+                file.size === run.source.size,
+              'MISSING_ASSET',
+              'Index source changed',
+            );
+            return index.response(
+              runId,
+              requestId,
+              response,
+              label,
+              sceneId,
+              model,
+              usage,
+              signal,
+            );
+          });
+        },
+        status(runId: string, status: 'failed' | 'cancelled', error: string) {
+          return withIndexStore((index) =>
+            index.update(runId, (r) => {
+              r.status = status;
+              r.error = error;
+            }),
+          );
+        },
+      },
+      import(file: Blob, name = file instanceof File ? file.name : 'media') {
+        return run<Asset>(background, 'import', { file, name });
+      },
+      async inspect(id: string) {
+        active();
+        return store.getAsset(id);
+      },
+      async rename(id: string, name: string, expectedName: string) {
+        active();
+        const result = await store.renameAsset(id, name, expectedName);
+        for (const project of result.projects)
+          notify({
+            projectId: project.id,
+            revision: project.revision,
+            type: 'changed',
+          });
+        return result.asset;
+      },
+      async updateClips(
+        id: string,
+        clips: AssetClip[],
+        expectedClipsRevision: number,
+      ) {
+        active();
+        const asset = await store.updateAssetClips(
+          id,
+          clips,
+          expectedClipsRevision,
+        );
+        if (!disposed) {
+          assetChanged(id);
+          assetBroadcast.postMessage(id);
+        }
+        return asset;
+      },
+      previewClip(id: string, range: { startUs: number; endUs: number }) {
+        active();
+        const bounds = { startUs: range.startUs, endUs: range.endUs };
+        return jobs.start(async (signal) => {
+          const asset = await store.getAsset(id);
+          validateAssetClips(
+            [
+              {
+                id: 'preview',
+                name: 'Preview',
+                ...bounds,
+                context: '',
+                transcript: '',
+              },
+            ],
+            asset,
+          );
+          invariant(
+            asset.status === 'ready',
+            'MISSING_ASSET',
+            'Relink the source to preview this clip.',
+          );
+          signal.throwIfAborted();
+          const file = await store.file(id);
+          signal.throwIfAborted();
+          return { file, kind: asset.kind, ...bounds };
+        });
+      },
+      relink(
+        assetId: string,
+        file: Blob,
+        name = file instanceof File ? file.name : 'media',
+      ) {
+        return run<Asset>(background, 'import', {
+          file,
+          name,
+          relinkId: assetId,
+        });
+      },
+      thumbnails(assetId: string, timesUs: number[], width = 320) {
+        return run<{ timeUs: number; blob: Blob }[]>(background, 'thumbnail', {
+          assetId,
+          timesUs,
+          width,
+        });
+      },
+      contactSheet(assetId: string, timesUs: number[], width = 320) {
+        return run<{ blob: Blob; timesUs: number[] }>(
+          background,
+          'contactSheet',
+          {
+            assetId,
+            timesUs,
+            width,
+          },
+        );
+      },
+      waveform(assetId: string, bins = 1000) {
+        return run<Float32Array>(background, 'waveform', { assetId, bins });
+      },
+      derivative(assetId: string, kind: 'pcm' | 'proxy') {
+        return run<File>(background, 'derivative', { assetId, kind });
+      },
+    },
+    commands: {
+      async validate(input: CommandBatch) {
+        active();
+        const batch = parseBatch(input),
+          p = await store.getProject(batch.projectId);
+        invariant(
+          p.revision === batch.expectedRevision,
+          'REVISION_CONFLICT',
+          'Stale project revision',
+        );
+        const result = applyOperations(p, batch.operations);
+        await store.validateAssets(result.project);
+        return result;
+      },
+      async apply(input: CommandBatch) {
+        active();
+        const receipt = await store.apply(input);
+        notify({
+          projectId: receipt.projectId,
+          revision: receipt.appliedRevision,
+          type: 'changed',
+        });
+        return receipt;
+      },
+      async undo(
+        projectId: string,
+        requestId: string,
+        expectedRevision: number,
+      ) {
+        active();
+        const receipt = await store.history(
+          projectId,
+          requestId,
+          expectedRevision,
+          'undo',
+        );
+        notify({
+          projectId,
+          revision: receipt.appliedRevision,
+          type: 'changed',
+        });
+        return receipt;
+      },
+      async redo(
+        projectId: string,
+        requestId: string,
+        expectedRevision: number,
+      ) {
+        active();
+        const receipt = await store.history(
+          projectId,
+          requestId,
+          expectedRevision,
+          'redo',
+        );
+        notify({
+          projectId,
+          revision: receipt.appliedRevision,
+          type: 'changed',
+        });
+        return receipt;
+      },
+    },
+    preview: {
+      frame(
+        projectId: string,
+        timeUs: number,
+        size?: { width: number; height: number },
+        versionId?: string,
+      ) {
+        active();
+        return jobs.start(
+          async (signal, progress, id) => {
+            invariant(
+              Number.isSafeInteger(timeUs) && timeUs >= 0,
+              'INVALID_COMMAND',
+              'Invalid frame timestamp',
+            );
+            const p = versionId
+              ? (await store.version(projectId, versionId)).project
+              : await store.getProject(projectId);
+            return interactive.run<FrameResult>(
+              'frame',
+              { namespace, jobId: id, project: p, timeUs, ...size },
+              signal,
+              progress,
+            );
+          },
+          { discard: (result) => result.image.close() },
+        );
+      },
+      session(
+        projectId: string,
+        canvas: HTMLCanvasElement,
+        audioContext: AudioContext,
+        versionId?: string,
+      ) {
+        active();
+        const session = createPreviewSession(
+          () =>
+            versionId
+              ? store.version(projectId, versionId).then((v) => v.project)
+              : store.getProject(projectId),
+          canvas,
+          audioContext,
+          (p, timeUs, signal) =>
+            interactive.run<FrameResult>(
+              'frame',
+              {
+                namespace,
+                project: p,
+                timeUs,
+                width: canvas.width,
+                height: canvas.height,
+              },
+              signal,
+              () => {},
+            ),
+          (p, startFrame, count, signal) =>
+            interactive.run<Float32Array[]>(
+              'audio',
+              {
+                namespace,
+                project: p,
+                startFrame,
+                count,
+                width: canvas.width,
+                height: canvas.height,
+              },
+              signal,
+              () => {},
+            ),
+        );
+        sessions.add(session);
+        return session;
+      },
+    },
+    exports: {
+      preflight(projectId: string, options: ExportOptions) {
+        active();
+        return jobs.start(async (signal, progress, id) =>
+          background.run<
+            Awaited<ReturnType<(typeof import('../media/export'))['preflight']>>
+          >(
+            'preflight',
+            {
+              namespace,
+              jobId: id,
+              project: await store.getProject(projectId),
+              options,
+            },
+            signal,
+            progress,
+          ),
+        );
+      },
+      start(
+        projectId: string,
+        options: ExportOptions,
+        expectedRevision?: number,
+      ) {
+        active();
+        return jobs.start(
+          async (signal, progress, id) => {
+            const p = await store.getProject(projectId);
+            invariant(
+              expectedRevision === undefined ||
+                (Number.isSafeInteger(expectedRevision) &&
+                  expectedRevision >= 0),
+              'INVALID_COMMAND',
+              'Invalid expected export revision',
+            );
+            invariant(
+              expectedRevision === undefined || p.revision === expectedRevision,
+              'REVISION_CONFLICT',
+              'Project changed before queued export started',
+            );
+            return store.lock('project-assets-' + p.id, 'shared', async () => {
+              for (const assetId of outputAssetIds(p))
+                await store.file(assetId);
+              const result = await background.run<ExportResult>(
+                'export',
+                { namespace, jobId: id, project: p, options },
+                signal,
+                progress,
+              );
+              return { ...result, dispose: () => store.remove(result.path) };
+            });
+          },
+          { discard: (result) => result.dispose() },
+        );
+      },
+    },
+    transcription: {
+      async transcript(id: string) {
+        active();
+        return store.transcript(id);
+      },
+    },
+    events: {
+      assets(listener: (assetId: string) => void) {
+        active();
+        assetListeners.add(listener);
+        return () => assetListeners.delete(listener);
+      },
+      versions(listener: (event: VersionEvent) => void) {
+        active();
+        versionListeners.add(listener);
+        return () => versionListeners.delete(listener);
+      },
+      jobs(listener: (event: JobEvent) => void) {
+        active();
+        const stopRaw = jobs.subscribe((event) => {
+          if (!queuedRawJobs.has(event.jobId)) listener(event);
+        });
+        const stopTasks = tasks.subscribe((task) =>
+          listener({
+            jobId: task.id,
+            stage: task.stage,
+            progress: task.progress,
+            error: task.error,
+            state:
+              task.state === 'completed'
+                ? 'completed'
+                : task.state === 'cancelled'
+                  ? 'cancelled'
+                  : taskTerminal(task.state)
+                    ? 'failed'
+                    : 'running',
+          }),
+        );
+        return () => {
+          stopRaw();
+          stopTasks();
+        };
+      },
+      projects(listener: (event: ProjectEvent) => void) {
+        active();
+        projectListeners.add(listener);
+        return () => projectListeners.delete(listener);
+      },
+    },
+    async dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const session of sessions) session.dispose();
+      let saveError: unknown;
+      try {
+        await autosave.flushAll();
+      } catch (error) {
+        saveError = error;
+      }
+      await tasks.dispose();
+      await jobs.dispose();
+      interactive.reset();
+      background.reset();
+      indexing.reset();
+      broadcast.close();
+      projectListeners.clear();
+      versionListeners.clear();
+      libraryBroadcast.close();
+      assetBroadcast.close();
+      assetListeners.clear();
+      libraryListeners.clear();
+      await Promise.all(
+        [...libraryStores.values()].map(async (pending) =>
+          (await pending.catch(() => undefined))?.close(),
+        ),
+      );
+      libraryStores.clear();
+      store.close();
+      if (saveError) throw saveError;
+    },
+  };
+  // Public long-running operations share durable scheduling; internal preview and
+  // nested jobs never queue behind themselves.
+  const queued = <A extends unknown[], R>(
+    kind: string,
+    operation: (...args: A) => import('../services/jobs').Job<R>,
+    policy: Partial<Omit<TaskHandler, 'execute'>> & { cache: TaskCachePolicy },
+  ): ((...args: A) => import('../services/jobs').Job<R>) => {
+    const { cache, ...scheduling } = policy;
+    tasks.register(kind, {
+      cache,
+      lane: 'media',
+      recovery: 'safe',
+      retryCodes: ['WORKER_FAILED'],
+      ...scheduling,
+      execute: (input, context) =>
+        adoptQueuedJob(operation(...(input as A)), context),
+    });
+    return (...args) => {
+      active();
+      return tasks.enqueue<R>(kind, args, { label: kind.replaceAll('.', ' ') });
+    };
+  };
+  api.storyboard.export = queued('storyboard.export', api.storyboard.export, {
+    cache: freshTask(
+      'Each caller requests a new local artifact; the renderer reuses versioned persisted scene bytes.',
+    ),
+    lane: 'export',
+    recovery: 'manual',
+    retryCodes: [],
+  });
+  api.coding.run = queued('coding.run', api.coding.run, {
+    cache: freshTask(
+      'Explicit authored code execution or file mutation publishes a new workspace revision; persisted files are reused on inspection and reload.',
+    ),
+    lane: 'coding',
+    recovery: 'manual',
+    retryCodes: [],
+    acceptCommittedResult: true,
+  });
+  api.coding.importFile = queued('coding.import', api.coding.importFile, {
+    cache: freshTask(
+      'Explicit import publishes a new immutable Media asset from a saved generated file.',
+    ),
+    lane: 'coding',
+    recovery: 'manual',
+    retryCodes: [],
+    acceptCommittedResult: true,
+  });
+  api.storyboard.store = queued('storyboard.store', api.storyboard.store, {
+    cache: freshTask(
+      'Store publishes a new immutable asset and library entry; the renderer reuses versioned persisted scene bytes.',
+    ),
+    lane: 'export',
+    recovery: 'manual',
+    retryCodes: [],
+    acceptCommittedResult: true,
+  });
+  api.masks.track = queued('media.trackMask', api.masks.track, {
+    cache: {
+      mode: 'reuse',
+      version: 'mask-translation-v2',
+      reuseCompleted: true,
+      key: async (input) => {
+        const [projectId, clipId, revision, mask] = input as [
+          string,
+          string,
+          number,
+          Mask?,
+        ];
+        const project = await store.getProject(projectId);
+        invariant(
+          project.revision === revision,
+          'REVISION_CONFLICT',
+          'Project changed before mask tracking',
+        );
+        const clip = project.tracks
+          .flatMap((t) => t.clips)
+          .find((c) => c.id === clipId);
+        invariant(
+          clip?.assetId,
+          'INVALID_DOCUMENT',
+          'Tracking clip has no source',
+        );
+        return taskCacheKey([
+          project,
+          clipId,
+          mask,
+          sourceIdentity(
+            await store.getAsset(clip.assetId),
+            await store.file(clip.assetId),
+          ),
+        ]);
+      },
+    },
+  });
+  api.assets.import = queued('media.import', api.assets.import, {
+    cache: freshTask('Import publishes a new original and asset identity.'),
+    recovery: 'manual',
+    acceptCommittedResult: true,
+    retryCodes: [],
+  });
+  api.assets.relink = queued('media.relink', api.assets.relink, {
+    cache: freshTask(
+      'Relink replaces a missing original and invalidates source caches.',
+    ),
+    recovery: 'manual',
+    acceptCommittedResult: true,
+    retryCodes: [],
+  });
+  api.assets.analyze = queued('media.analyze', api.assets.analyze, {
+    cache: freshTask(
+      'Explicit analysis creates or resumes its selected index run and checkpoints.',
+    ),
+    lane: 'index',
+  });
+  api.assets.thumbnails = queued('media.thumbnails', api.assets.thumbnails, {
+    cache: mediaTaskCache(store, 'media.thumbnails'),
+    lane: 'derivatives',
+  });
+  api.assets.contactSheet = queued(
+    'media.contactSheet',
+    api.assets.contactSheet,
+    { lane: 'derivatives', cache: mediaTaskCache(store, 'media.contactSheet') },
+  );
+  api.assets.waveform = queued('media.waveform', api.assets.waveform, {
+    cache: mediaTaskCache(store, 'media.waveform'),
+    lane: 'derivatives',
+  });
+  api.assets.derivative = queued('media.derivative', api.assets.derivative, {
+    cache: mediaTaskCache(store, 'media.derivative'),
+    lane: 'derivatives',
+  });
+  api.exports.preflight = queued('export.preflight', api.exports.preflight, {
+    cache: freshTask(
+      'Probe current native codecs and current project/source readiness.',
+    ),
+    lane: 'export',
+  });
+  api.exports.start = queued('export.video', api.exports.start, {
+    cache: freshTask('Each export has caller-owned disposable native output.'),
+    lane: 'export',
+    recovery: 'manual',
+    retryCodes: [],
+    encodeResult: async (result) => {
+      const saved = {
+        ...(result as ExportResult & { dispose?: () => Promise<void> }),
+      };
+      delete saved.dispose;
+      // Detach the durable take from the disposable OPFS export. Streaming into
+      // a browser Blob avoids buffering a large export in a JS ArrayBuffer.
+      const blob = await new Response(saved.file.stream()).blob();
+      saved.file = new File([blob], saved.file.name, {
+        type: saved.file.type,
+        lastModified: saved.file.lastModified,
+      });
+      return saved;
+    },
+    decodeResult: (value) => {
+      const result = value as ExportResult;
+      return { ...result, dispose: () => store.remove(result.path) };
+    },
+    discard: (result) =>
+      (result as ExportResult & { dispose: () => Promise<void> }).dispose(),
+  });
+  api.workspace.export = queued('workspace.export', api.workspace.export, {
+    cache: freshTask(
+      'Backup captures current projects, versions, preferences and source selection.',
+    ),
+    lane: 'transfer',
+    recovery: 'manual',
+    retryCodes: [],
+  });
+  api.workspace.import = queued('workspace.import', api.workspace.import, {
+    cache: freshTask(
+      'Import publishes fresh project/source identities and settings.',
+    ),
+    lane: 'transfer',
+    recovery: 'manual',
+    acceptCommittedResult: true,
+    retryCodes: [],
+  });
+  tasks.start();
+  return api;
+}
+export type Editor = Awaited<ReturnType<typeof createEditor>>;

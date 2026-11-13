@@ -1,0 +1,945 @@
+import { behaviorBases } from './coverage-bases';
+import { createWorkspace, navigateWorkspace } from './workspace-project-helper';
+import { closeMediaImportAndPlace } from './workspace-import-helper';
+import { openVersions, openWorkspaceGroup } from './workspace-settings-helper';
+import { chromium, expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import type { Asset, Project } from '../../src/editor';
+
+async function source(page: Page) {
+  await page.evaluate(() => {
+    const state = {
+      calls: 0,
+      mode: 'ready',
+      stream: null as MediaStream | null,
+      release: null as (() => void) | null,
+      options: null as DisplayMediaStreamOptions | null,
+    };
+    Object.assign(window, { recordingFixture: state });
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async (options: DisplayMediaStreamOptions) => {
+        state.calls++;
+        state.options = options;
+        if (state.mode === 'denied')
+          throw new DOMException('Denied', 'NotAllowedError');
+        if (state.mode === 'held')
+          await new Promise<void>((resolve) => {
+            state.release = resolve;
+          });
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d')!;
+        let frame = 0;
+        const draw = () => {
+          ctx.fillStyle = '#00ff00';
+          ctx.fillRect(0, 0, 320, 180);
+          ctx.fillStyle = '#ff0000';
+          ctx.fillRect((frame++ % 10) * 10, 0, 10, 10);
+        };
+        draw();
+        const stream = canvas.captureStream(30);
+        const timer = setInterval(draw, 33);
+        if (options.audio && state.mode !== 'no-audio') {
+          const audio = new AudioContext();
+          const oscillator = audio.createOscillator();
+          const gain = audio.createGain();
+          gain.gain.value = 0.1;
+          const sink = audio.createMediaStreamDestination();
+          oscillator.connect(gain).connect(sink);
+          oscillator.start();
+          void audio.resume();
+          stream.addTrack(sink.stream.getAudioTracks()[0]!);
+          const track = sink.stream.getAudioTracks()[0]!;
+          const stop = track.stop.bind(track);
+          track.stop = () => {
+            oscillator.stop();
+            void audio.close();
+            stop();
+          };
+        }
+        const track = stream.getVideoTracks()[0]!;
+        const stop = track.stop.bind(track);
+        track.stop = () => {
+          clearInterval(timer);
+          stop();
+        };
+        state.stream = stream;
+        return stream;
+      },
+    });
+  });
+}
+async function fixture(page: Page, expression: string) {
+  return page.evaluate((expression) => {
+    const state = (
+      window as unknown as {
+        recordingFixture: {
+          mode: string;
+          calls: number;
+          stream: MediaStream;
+          release: () => void;
+        };
+      }
+    ).recordingFixture;
+    if (
+      expression === 'denied' ||
+      expression === 'held' ||
+      expression === 'ready' ||
+      expression === 'no-audio'
+    )
+      state.mode = expression;
+    if (expression === 'release') state.release();
+    if (expression === 'ended') {
+      state.stream.getVideoTracks()[0]!.stop();
+      state.stream.getVideoTracks()[0]!.dispatchEvent(new Event('ended'));
+    }
+    return {
+      calls: state.calls,
+      ended:
+        state.stream
+          ?.getTracks()
+          .every((track) => track.readyState === 'ended') ?? false,
+    };
+  }, expression);
+}
+async function open(page: Page) {
+  const group = await openWorkspaceGroup(page, 'Workspace');
+  await group
+    .getByRole('menuitem', { name: 'Record screen', exact: true })
+    .click();
+  return page.getByRole('dialog', { name: 'Record screen', exact: true });
+}
+async function snapshot(
+  page: Page,
+  base: string,
+): Promise<{ project: Project; assets: Asset[] }> {
+  return page.evaluate(async (base) => {
+    const { createEditor } = (await import(
+      base + 'editor.js'
+    )) as typeof import('../../src/editor');
+    const editor = await createEditor();
+    try {
+      const project = await editor.projects.snapshot(
+        (await editor.projects.list())[0]!.id,
+      );
+      const ids = [
+        ...new Set(
+          project.tracks.flatMap((track) =>
+            track.clips
+              .map((clip) => clip.assetId)
+              .filter((id): id is string => !!id),
+          ),
+        ),
+      ];
+      const assets = await Promise.all(
+        ids.map((id) => editor.assets.inspect(id)),
+      );
+      return { project, assets };
+    } finally {
+      await editor.dispose();
+    }
+  }, base);
+}
+for (const base of behaviorBases) {
+  test(`screen recording browser audio guidance before permission ${base}`, async ({
+    page,
+  }, info) => {
+    await page.goto(base);
+    await source(page);
+    for (const [browser, userAgent, unsupported] of [
+      [
+        'Safari',
+        'Mozilla/5.0 AppleWebKit/605.1.15 Version/26.0 Safari/605.1.15',
+        true,
+      ],
+      ['Firefox', 'Mozilla/5.0 Gecko/20100101 Firefox/144.0', true],
+      ['Chrome', 'Mozilla/5.0 Chrome/141.0.0.0 Safari/537.36', false],
+      [
+        'Edge',
+        'Mozilla/5.0 Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0',
+        false,
+      ],
+      [
+        'Opera',
+        'Mozilla/5.0 Chrome/141.0.0.0 Safari/537.36 OPR/124.0.0.0',
+        false,
+      ],
+      ['Unknown', 'UnknownBrowser/1.0', false],
+    ] as const) {
+      await test.step(browser, async () => {
+        await page.evaluate((value) => {
+          Object.defineProperty(navigator, 'userAgent', {
+            configurable: true,
+            value,
+          });
+        }, userAgent);
+        const dialog = await open(page);
+        const audio = dialog.getByRole('checkbox', {
+          name: 'Include shared audio',
+          exact: true,
+        });
+        await expect(audio).not.toBeChecked();
+        await audio.check();
+        const note = dialog.locator('#record-shared-audio-help');
+        await expect(note).toBeVisible();
+        await expect(audio).toHaveAttribute(
+          'aria-describedby',
+          'record-shared-audio-help',
+        );
+        if (unsupported) {
+          await expect(note).toContainText(browser);
+          await expect(note).toContainText(
+            'does not provide shared tab or system audio',
+          );
+          await expect(note).toContainText('record without sound');
+          await expect(note).toContainText('open LocalCut and the page');
+        } else if (browser === 'Unknown') {
+          await expect(note).toContainText('depends on your browser');
+          await expect(note).toContainText('Chrome or Edge');
+        } else {
+          await expect(note).toContainText(browser);
+          await expect(note).toContainText('Share tab audio');
+          await expect(note).toContainText('operating system');
+          await expect(note).not.toContainText('does not provide');
+        }
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(
+          await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+        ).toBe(true);
+        await page.screenshot({
+          path: info.outputPath(`audio-guidance-${browser}.png`),
+        });
+        expect((await fixture(page, '')).calls).toBe(0);
+        expect(await page.evaluate(() => indexedDB.databases())).toHaveLength(
+          0,
+        );
+        await audio.uncheck();
+        await expect(note).not.toBeVisible();
+        await expect(audio).not.toHaveAttribute('aria-describedby');
+        await dialog
+          .getByRole('button', { name: 'Cancel', exact: true })
+          .click();
+      });
+    }
+  });
+
+  test(`screen recording native media imports, persists and exports ${base}`, async ({
+    page,
+  }, info) => {
+    await page.goto(base);
+    await source(page);
+    let dialog = await open(page);
+    expect((await fixture(page, '')).calls).toBe(0);
+    await dialog
+      .getByRole('checkbox', { name: 'Include shared audio' })
+      .check();
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    await page.screenshot({ path: info.outputPath('recording-live.png') });
+    await dialog.getByRole('button', { name: 'Stop recording' }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    expect((await fixture(page, '')).ended).toBe(true);
+    const preview = dialog.getByLabel('Recorded video preview');
+    await expect
+      .poll(() =>
+        preview.evaluate((video: HTMLVideoElement) => video.readyState),
+      )
+      .toBeGreaterThanOrEqual(2);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: info.outputPath('recording-ready-narrow.png'),
+    });
+    expect(
+      await dialog.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    await dialog.getByRole('button', { name: 'Add to media' }).click();
+    await closeMediaImportAndPlace(page);
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      page
+        .getByRole('button', { name: /Screen recording .*webm/, exact: false })
+        .first(),
+    ).toBeVisible();
+    const saved = await snapshot(page, base);
+    expect(saved.assets[0]).toMatchObject({
+      kind: 'video',
+      width: 320,
+      height: 180,
+      status: 'ready',
+      videoCodec: 'vp9',
+      audioCodec: 'opus',
+    });
+    expect(saved.assets[0]!.durationUs).toBeGreaterThan(500000);
+    const projectId = saved.project.id;
+    await page.reload();
+    await expect
+      .poll(async () => (await snapshot(page, base)).project.id)
+      .toBe(projectId);
+    const exportMenu = await openWorkspaceGroup(page, 'Export');
+    await expect(
+      exportMenu.getByRole('menuitem', { name: 'Export video', exact: true }),
+    ).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    // Exercise actual native exports and reopen them through the public facade.
+    const exports = await page.evaluate(
+      async ({ base, projectId }) => {
+        const { createEditor } = (await import(
+          base + 'editor.js'
+        )) as typeof import('../../src/editor');
+        const editor = await createEditor();
+        try {
+          const results = [];
+          for (const format of ['mp4', 'webm'] as const) {
+            const artifact = await editor.exports.start(projectId, { format })
+              .completion;
+            try {
+              const file = artifact.file;
+              const asset = await editor.assets.import(
+                new File([file], 'export.' + format, { type: file.type }),
+              ).completion;
+              const frames = await editor.assets.thumbnails(asset.id, [0], 32)
+                .completion;
+              const bitmap = await createImageBitmap(frames[0]!.blob);
+              const canvas = new OffscreenCanvas(32, 18);
+              const ctx = canvas.getContext('2d')!;
+              ctx.drawImage(bitmap, 0, 0, 32, 18);
+              bitmap.close();
+              results.push({
+                audio: asset.audioCodec,
+                peak: Math.max(
+                  ...(await editor.assets.waveform(asset.id, 32).completion),
+                ),
+                pixel: [...ctx.getImageData(16, 9, 1, 1).data],
+              });
+            } finally {
+              await artifact.dispose();
+            }
+          }
+          return results;
+        } finally {
+          await editor.dispose();
+        }
+      },
+      { base, projectId },
+    );
+    expect(exports.map((result) => result.audio)).toEqual(['aac', 'opus']);
+    for (const result of exports) {
+      expect(result.pixel[1]).toBeGreaterThan(220);
+      expect(result.peak).toBeGreaterThan(0.05);
+    }
+    await source(page);
+    dialog = await open(page);
+    await fixture(page, 'denied');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(dialog.getByRole('alert')).toContainText(
+      'cancelled or denied',
+    );
+    await fixture(page, 'ready');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    await fixture(page, 'ended');
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(true);
+    expect((await snapshot(page, base)).project.revision).toBe(
+      saved.project.revision,
+    );
+  });
+
+  test(`screen recording requires requested sound and allows source retry or video-only capture ${base}`, async ({
+    page,
+  }, info) => {
+    await page.goto(base);
+    await source(page);
+    const dialog = await open(page);
+    const audio = dialog.getByRole('checkbox', {
+      name: 'Include shared audio',
+      exact: true,
+    });
+    await audio.check();
+    await fixture(page, 'no-audio');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(dialog.getByRole('alert')).toContainText(
+      'Your browser did not share audio',
+    );
+    await expect(dialog).toContainText('Chrome');
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(true);
+    expect(await page.evaluate(() => indexedDB.databases())).toHaveLength(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: info.outputPath('missing-shared-audio.png'),
+    });
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+    await fixture(page, 'ready');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(dialog.getByRole('status')).toContainText(
+      'Shared audio included',
+    );
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    await page.evaluate(() => {
+      const stream = (
+        window as unknown as { recordingFixture: { stream: MediaStream } }
+      ).recordingFixture.stream;
+      stream.getAudioTracks()[0]!.stop();
+      stream.getAudioTracks()[0]!.dispatchEvent(new Event('ended'));
+    });
+    await expect(dialog.getByRole('status')).toContainText(
+      'shared audio ended',
+    );
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    await page.screenshot({ path: info.outputPath('audio-ended-ready.png') });
+    expect((await fixture(page, '')).ended).toBe(true);
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+    await open(page);
+    await audio.uncheck();
+    await fixture(page, 'no-audio');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    await dialog.getByRole('button', { name: 'Stop recording' }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+    expect((await fixture(page, '')).ended).toBe(true);
+  });
+
+  test(`screen recording remains controllable while task queue initialization is pending ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    await source(page);
+    const dialog = await open(page);
+    let held = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/assets/editor-*.js', async (route) => {
+      held = true;
+      await gate;
+      await route.continue();
+    });
+    try {
+      await dialog
+        .getByRole('button', { name: 'Choose source and record' })
+        .click();
+      await expect.poll(() => held).toBe(true);
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      expect((await fixture(page, '')).ended).toBe(false);
+      const controls = page.getByRole('region', {
+        name: 'Screen recording controls',
+      });
+      await expect(controls.getByRole('status')).toContainText('0:01');
+      await controls.getByRole('button', { name: 'Stop recording' }).click();
+      expect((await fixture(page, '')).ended).toBe(true);
+      await expect(dialog.getByRole('status')).toHaveText(
+        'Finishing recording…',
+      );
+      await dialog.getByRole('button', { name: 'Hide', exact: true }).click();
+      release();
+      await expect(controls.getByRole('status')).toHaveText('Recording ready');
+      await controls.getByRole('button', { name: 'Show recording' }).click();
+      await expect(
+        dialog.getByRole('button', { name: 'Add to media' }),
+      ).toBeEnabled();
+      expect((await fixture(page, '')).calls).toBe(1);
+      await dialog
+        .getByRole('button', { name: 'Discard', exact: true })
+        .click();
+    } finally {
+      release();
+    }
+  });
+
+  test(`screen recording continues after dialog dismissal until explicit stop ${base}`, async ({
+    page,
+  }, info) => {
+    await page.goto(base);
+    await source(page);
+    const dialog = await open(page);
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    const controls = page.getByRole('region', {
+      name: 'Screen recording controls',
+      exact: true,
+    });
+    for (const dismissal of ['Close', 'Escape', 'backdrop', 'Hide']) {
+      await test.step(dismissal, async () => {
+        if (dismissal === 'Escape') await page.keyboard.press('Escape');
+        else if (dismissal === 'backdrop') await page.mouse.click(5, 5);
+        else
+          await dialog
+            .getByRole('button', { name: dismissal, exact: true })
+            .click();
+        await expect(dialog).not.toBeVisible();
+        expect((await fixture(page, '')).ended).toBe(false);
+        await expect(controls.getByRole('status')).toContainText('Recording');
+        if (dismissal === 'Close') {
+          const elapsed = await controls.getByRole('status').textContent();
+          await expect(controls.getByRole('status')).not.toHaveText(elapsed!);
+          await page.setViewportSize({ width: 390, height: 844 });
+          await expect(controls).toBeInViewport();
+          expect(
+            await controls.evaluate((el) => el.scrollWidth <= el.clientWidth),
+          ).toBe(true);
+          await page.screenshot({
+            path: info.outputPath('recording-hidden-narrow.png'),
+          });
+          await page.setViewportSize({ width: 1280, height: 800 });
+          await page.screenshot({
+            path: info.outputPath('recording-hidden-desktop.png'),
+          });
+          await controls.screenshot({
+            path: info.outputPath('recording-controls.png'),
+          });
+        }
+        await controls
+          .getByRole('button', { name: 'Show recording', exact: true })
+          .click();
+        await expect(dialog).toBeVisible();
+        await expect
+          .poll(() =>
+            dialog
+              .getByLabel('Live recording preview')
+              .evaluate(
+                (video: HTMLVideoElement) =>
+                  video.srcObject instanceof MediaStream &&
+                  video.readyState >= 2,
+              ),
+          )
+          .toBe(true);
+        expect((await fixture(page, '')).calls).toBe(1);
+      });
+    }
+    await dialog.getByRole('button', { name: 'Hide', exact: true }).click();
+    await controls
+      .getByRole('button', { name: 'Hide recording bar', exact: true })
+      .click();
+    await expect(controls).not.toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Workspace settings', exact: true }),
+    ).toBeFocused();
+    expect((await fixture(page, '')).ended).toBe(false);
+    await open(page);
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    expect((await fixture(page, '')).calls).toBe(1);
+    await dialog.getByRole('button', { name: 'Hide', exact: true }).click();
+    await expect(controls).toBeVisible();
+    const workspaceUrl = await createWorkspace(page, 'Recording workspace');
+    expect((await fixture(page, '')).ended).toBe(false);
+    const expandMedia = page.getByRole('button', {
+      name: 'Expand media',
+      exact: true,
+    });
+    await expect(
+      page.getByRole('button', { name: /^(Expand|Collapse) media$/ }),
+    ).toBeVisible();
+    if (await expandMedia.isVisible()) await expandMedia.click();
+    await expect(
+      page.getByRole('button', { name: 'Record screen', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: info.outputPath('recording-editor-controls.png'),
+    });
+    await controls
+      .getByRole('button', { name: 'Hide recording bar', exact: true })
+      .click();
+    await expect(controls).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(false);
+    await page.screenshot({
+      path: info.outputPath('recording-bar-hidden.png'),
+    });
+    await page
+      .getByRole('button', { name: 'Record screen', exact: true })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    expect((await fixture(page, '')).calls).toBe(1);
+    await dialog.getByRole('button', { name: 'Hide', exact: true }).click();
+    await expect(controls).toBeVisible();
+    await navigateWorkspace(page, base);
+    await expect(
+      page.getByRole('button', { name: 'New project', exact: true }),
+    ).toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(false);
+    await navigateWorkspace(page, new URL(workspaceUrl).pathname);
+    await expect(
+      page.getByRole('button', { name: 'Open project', exact: true }),
+    ).toContainText('Recording workspace');
+    expect((await fixture(page, '')).ended).toBe(false);
+    await navigateWorkspace(page, base + 'invalid-recording-route');
+    await expect(dialog).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(false);
+    await controls.getByRole('button', { name: 'Stop recording' }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Recorded video preview')).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(true);
+    await page.goBack();
+    await expect(dialog).not.toBeVisible();
+    await controls.getByRole('button', { name: 'Show recording' }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    const previewUrl = await dialog
+      .getByLabel('Recorded video preview')
+      .getAttribute('src');
+    await page.keyboard.press('Escape');
+    await expect(controls.getByRole('status')).toHaveText('Recording ready');
+    await controls.getByRole('button', { name: 'Show recording' }).click();
+    await expect(dialog.getByLabel('Recorded video preview')).toHaveAttribute(
+      'src',
+      previewUrl!,
+    );
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(controls).not.toBeVisible();
+    await open(page);
+    await expect(
+      dialog.getByRole('button', { name: 'Choose source and record' }),
+    ).toBeEnabled();
+    expect((await fixture(page, '')).calls).toBe(1);
+  });
+
+  test(`screen recording cancels pending permission and explicit queue cancellation ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    await source(page);
+    let dialog = await open(page);
+    await fixture(page, 'held');
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(dialog.getByRole('status')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await fixture(page, 'release');
+    await expect.poll(async () => (await fixture(page, '')).ended).toBe(true);
+    await fixture(page, 'ready');
+    dialog = await open(page);
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(false);
+    // Capture retains only queue metadata; hiding never initializes canonical
+    // editing storage, imports media or creates a project.
+    const databases = await page.evaluate(() => indexedDB.databases());
+    expect(
+      databases.filter((database) => database.name !== 'localcut-tasks-v1'),
+    ).toHaveLength(0);
+    await createWorkspace(page, 'Recording history');
+    await openVersions(page);
+    await page
+      .getByRole('group', { name: 'Saved versions' })
+      .getByRole('button')
+      .first()
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Return to current', exact: true }),
+    ).toBeVisible();
+    expect((await fixture(page, '')).ended).toBe(false);
+    await page.getByRole('button', { name: 'Task queue', exact: true }).click();
+    const queue = page.getByRole('dialog', { name: 'Task queue', exact: true });
+    await queue
+      .getByRole('row', { name: 'Screen recording', exact: true })
+      .getByRole('button', { name: 'Cancel task', exact: true })
+      .click();
+    await expect(
+      queue
+        .getByRole('row', { name: 'Screen recording', exact: true })
+        .getByRole('status'),
+    ).toContainText('cancelled');
+    await expect.poll(async () => (await fixture(page, '')).ended).toBe(true);
+    await queue.getByRole('button', { name: 'Close', exact: true }).click();
+    await page
+      .getByRole('region', { name: 'Screen recording controls' })
+      .getByRole('button', { name: 'Show recording' })
+      .click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Choose source and record' }),
+    ).not.toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Return to current', exact: true })
+      .click();
+    dialog = await open(page);
+    await dialog
+      .getByRole('button', { name: 'Choose source and record' })
+      .click();
+    await expect(
+      dialog.getByRole('button', { name: 'Stop recording' }),
+    ).toBeVisible();
+    await expect(dialog.getByRole('status')).toContainText('0:01');
+    await dialog.getByRole('button', { name: 'Stop recording' }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Add to media' }),
+    ).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect.poll(async () => (await fixture(page, '')).ended).toBe(true);
+  });
+}
+
+// A dedicated stable-Chrome instance selects only our synthetic tab. This exercises
+// real getDisplayMedia without recording the user's desktop or replacing capture.
+test('screen recording native tab capture manual stop and source cessation', async ({
+  baseURL,
+}, info) => {
+  test.setTimeout(60000);
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    executablePath: process.env.LOCALCUT_CHROME_EXECUTABLE,
+    // Headless defaults mute browser output, including the tab audio we test.
+    ignoreDefaultArgs: ['--mute-audio'],
+    args: [
+      // Keep the tab-capture signal while routing OS playback to a silent sink.
+      '--disable-audio-output',
+      '--auto-select-tab-capture-source-by-title=LocalCut capture fixture',
+    ],
+  });
+  try {
+    for (const { base, stopMode } of behaviorBases.flatMap((base) =>
+      ['manual', 'source-ended'].map((stopMode) => ({ base, stopMode })),
+    )) {
+      const context = await browser.newContext({ reducedMotion: 'reduce' });
+      try {
+        const origin = baseURL!;
+        const target = await context.newPage();
+        await target.route('**/capture-fixture', (route) =>
+          route.fulfill({
+            contentType: 'text/html',
+            body: '<!doctype html><title>LocalCut capture fixture</title><style>body{margin:0;background:#00ff00}div{width:10px;height:10px;background:red;animation:move 1s infinite alternate}@keyframes move{to{transform:translateX(100px)}}</style><div></div>',
+          }),
+        );
+        await target.goto(origin + '/capture-fixture');
+        await target.evaluate(() => {
+          const button = document.createElement('button');
+          button.textContent = 'Play fixture sound';
+          button.onclick = () => {
+            const audio = new AudioContext();
+            Object.assign(window, { fixtureAudio: audio });
+            const oscillator = audio.createOscillator();
+            const gain = audio.createGain();
+            // Leave signal margin for native tab-capture attenuation while
+            // keeping the decoded waveform assertion at its existing level.
+            gain.gain.value = 0.25;
+            oscillator.connect(gain).connect(audio.destination);
+            oscillator.start();
+            void audio.resume();
+            window.addEventListener(
+              'pagehide',
+              () => {
+                void audio.close();
+              },
+              { once: true },
+            );
+          };
+          document.body.append(button);
+        });
+        await target
+          .getByRole('button', { name: 'Play fixture sound' })
+          .click();
+        await expect
+          .poll(() =>
+            target.evaluate(
+              () =>
+                (window as unknown as { fixtureAudio: AudioContext })
+                  .fixtureAudio.state,
+            ),
+          )
+          .toBe('running');
+        const page = await context.newPage();
+        await page.goto(origin + base);
+        await page.evaluate(() => {
+          const capture = navigator.mediaDevices.getDisplayMedia.bind(
+            navigator.mediaDevices,
+          );
+          navigator.mediaDevices.getDisplayMedia = async (options) => {
+            const stream = await capture(options);
+            Object.assign(window, { nativeCapture: stream });
+            return stream;
+          };
+        });
+        const dialog = await open(page);
+        await dialog
+          .getByRole('checkbox', { name: 'Include shared audio', exact: true })
+          .check();
+        await dialog
+          .getByRole('button', { name: 'Choose source and record' })
+          .click();
+        await expect(
+          dialog.getByRole('button', { name: 'Stop recording' }),
+        ).toBeVisible();
+        expect(
+          await page.evaluate(
+            () =>
+              (
+                window as unknown as { nativeCapture: MediaStream }
+              ).nativeCapture
+                .getVideoTracks()[0]!
+                .getSettings().displaySurface,
+          ),
+        ).toBe('browser');
+        await expect(dialog.getByRole('status')).toContainText('0:01');
+        if (stopMode === 'manual') {
+          await dialog
+            .getByRole('button', { name: 'Close', exact: true })
+            .click();
+          await expect(dialog).not.toBeVisible();
+          expect(
+            await page.evaluate(() =>
+              (
+                window as unknown as { nativeCapture: MediaStream }
+              ).nativeCapture
+                .getTracks()
+                .every((track) => track.readyState === 'live'),
+            ),
+          ).toBe(true);
+          // Frames produced only after dismissal must reach the final file.
+          await target.evaluate(() => {
+            document.body.style.background = '#0000ff';
+          });
+          const controls = page.getByRole('region', {
+            name: 'Screen recording controls',
+          });
+          await expect(controls.getByRole('status')).toContainText('0:03');
+          await controls
+            .getByRole('button', { name: 'Stop recording' })
+            .click();
+        }
+        // Cover real browser whole-source cessation as well as LocalCut stop.
+        if (stopMode === 'source-ended') await target.close();
+        await expect(
+          dialog.getByRole('button', { name: 'Add to media' }),
+        ).toBeEnabled();
+        if (stopMode === 'manual') {
+          const download = page.waitForEvent('download');
+          await dialog.getByRole('link', { name: 'Save a copy' }).click();
+          await (
+            await download
+          ).saveAs(info.outputPath('native-hidden-recording.webm'));
+        }
+        await dialog.getByRole('button', { name: 'Add to media' }).click();
+        await closeMediaImportAndPlace(page);
+        await expect(dialog).not.toBeVisible();
+        await expect
+          .poll(async () => (await snapshot(page, base)).assets.length)
+          .toBe(1);
+        const saved = await snapshot(page, base);
+        expect(saved.assets[0]!.videoCodec).toBe('vp9');
+        expect(saved.assets[0]!.audioCodec).toBe('opus');
+        const peak = await page.evaluate(
+          async ({ base, assetId }) => {
+            const { createEditor } = (await import(
+              base + 'editor.js'
+            )) as typeof import('../../src/editor');
+            const editor = await createEditor();
+            try {
+              return Math.max(
+                ...(await editor.assets.waveform(assetId, 32).completion),
+              );
+            } finally {
+              await editor.dispose();
+            }
+          },
+          { base, assetId: saved.assets[0]!.id },
+        );
+        expect(peak).toBeGreaterThan(0.05);
+        expect(saved.assets[0]!.durationUs).toBeGreaterThan(500000);
+        const color = await page.evaluate(
+          async ({ base, assetId, timeUs, channel }) => {
+            const { createEditor } = (await import(
+              base + 'editor.js'
+            )) as typeof import('../../src/editor');
+            const editor = await createEditor();
+            try {
+              const frames = await editor.assets.thumbnails(
+                assetId,
+                [timeUs],
+                32,
+              ).completion;
+              const bitmap = await createImageBitmap(frames[0]!.blob);
+              const canvas = new OffscreenCanvas(32, 18);
+              const ctx = canvas.getContext('2d')!;
+              ctx.drawImage(bitmap, 0, 0, 32, 18);
+              bitmap.close();
+              return ctx.getImageData(16, 9, 1, 1).data[channel];
+            } finally {
+              await editor.dispose();
+            }
+          },
+          {
+            base,
+            assetId: saved.assets[0]!.id,
+            timeUs: Math.floor(saved.assets[0]!.durationUs / 2),
+            channel: stopMode === 'manual' ? 2 : 1,
+          },
+        );
+        expect(color).toBeGreaterThan(220);
+        if (stopMode === 'manual')
+          expect(saved.assets[0]!.durationUs).toBeGreaterThan(2000000);
+        expect(
+          await page.evaluate(() =>
+            (window as unknown as { nativeCapture: MediaStream }).nativeCapture
+              .getTracks()
+              .every((track) => track.readyState === 'ended'),
+          ),
+        ).toBe(true);
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+});

@@ -1,0 +1,103 @@
+import type { Asset, Clip, EditOperation, Project } from '../editor';
+
+export function previewFrameSize(
+  project: Pick<Project, 'width' | 'height'> | null,
+) {
+  const { width, height } = project ?? { width: 1920, height: 1080 };
+  const scale = Math.min(960 / width, 960 / height);
+  const previewWidth = Math.max(1, Math.round(width * scale));
+  return {
+    width: previewWidth,
+    // The renderer scales uniformly from width. Derive height from the rounded
+    // width too, so very narrow projects remain complete rather than cropped.
+    height: Math.max(1, Math.round((previewWidth * height) / width)),
+  };
+}
+
+export function projectDuration(project: Project | null) {
+  return Math.max(
+    0,
+    ...(project?.tracks.flatMap((track) =>
+      track.clips.map((clip) => clip.startUs + clip.durationUs),
+    ) ?? []),
+  );
+}
+export function formatTime(timeUs: number) {
+  const seconds = Math.max(0, timeUs) / 1e6;
+  return (
+    Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0') +
+    ':' +
+    (seconds % 60).toFixed(2).padStart(5, '0')
+  );
+}
+export function clipName(clip: Clip, assets: Asset[]) {
+  return (
+    assets.find((asset) => asset.id === clip.assetId)?.name ??
+    clip.text?.text ??
+    (clip.kind === 'caption' ? 'Captions' : 'Text')
+  );
+}
+export const MEDIA_DRAG_EVENT = 'localcut-media-drag';
+export interface MediaDragDetail {
+  assetId: string;
+  clientX: number;
+  clientY: number;
+  phase: 'move' | 'drop' | 'cancel';
+}
+
+export function assetClip(
+  project: Project,
+  asset: Asset,
+  startUs: number,
+): Extract<EditOperation, { type: 'insertClip' }>['clip'] {
+  const scale =
+    asset.width && asset.height
+      ? Math.min(project.width / asset.width, project.height / asset.height)
+      : 1;
+  const width = asset.width ? asset.width * scale : project.width;
+  const height = asset.height ? asset.height * scale : project.height;
+  return {
+    id: crypto.randomUUID(),
+    kind: asset.kind,
+    assetId: asset.id,
+    startUs,
+    durationUs: asset.kind === 'image' ? 5_000_000 : asset.durationUs,
+    width,
+    height,
+    x: (project.width - width) / 2,
+    y: (project.height - height) / 2,
+    ...(asset.kind === 'image' ? {} : { sourceOutUs: asset.durationUs }),
+  };
+}
+
+export function appendAsset(project: Project, asset: Asset): EditOperation[] {
+  const kind: 'audio' | 'video' = asset.kind === 'audio' ? 'audio' : 'video';
+  const track = project.tracks.find(
+    (track) => track.kind === kind && !track.locked,
+  );
+  const trackId = track?.id ?? crypto.randomUUID();
+  const startUs = Math.max(
+    0,
+    ...(track?.clips.map((clip) => clip.startUs + clip.durationUs) ?? []),
+  );
+  const operations: EditOperation[] = [];
+  if (!track)
+    operations.push({ type: 'addTrack', track: { id: trackId, kind } });
+  operations.push({
+    type: 'insertClip',
+    trackId,
+    clip: assetClip(project, asset, startUs),
+  });
+  return operations;
+}
+export function downloadFile(file: Blob, name: string) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  // Keep the URL alive long enough for the browser's download process to take it.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

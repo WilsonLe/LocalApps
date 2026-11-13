@@ -1,0 +1,840 @@
+import { behaviorBases } from './coverage-bases';
+import { secondaryTab } from './workspace-tab';
+import { dragPlayhead } from './workspace-playhead-helper';
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import type { Project } from '../../src/editor';
+
+async function prepare(page: Page, base: string, overlap = false) {
+  await page.goto(base);
+  const id = await page.evaluate(
+    async ({ base, overlap }) => {
+      const { createEditor } = (await import(
+        base + 'editor.js'
+      )) as typeof import('../../src/editor');
+      const editor = await createEditor();
+      try {
+        const canvas = new OffscreenCanvas(128, 72),
+          context = canvas.getContext('2d')!;
+        context.fillStyle = '#369';
+        context.fillRect(0, 0, 128, 72);
+        const asset = await editor.assets.import(
+          new File([await canvas.convertToBlob()], 'input.png', {
+            type: 'image/png',
+          }),
+        ).completion;
+        context.fillStyle = '#f00';
+        context.fillRect(0, 0, 128, 72);
+        const upper = overlap
+          ? await editor.assets.import(
+              new File([await canvas.convertToBlob()], 'upper.png', {
+                type: 'image/png',
+              }),
+            ).completion
+          : asset;
+        const p = await editor.projects.create('Input combinations');
+        await editor.commands.apply({
+          projectId: p.id,
+          requestId: crypto.randomUUID(),
+          expectedRevision: 0,
+          operations: [
+            { type: 'addTrack', track: { id: 'v', kind: 'video' } },
+            ...[0, overlap ? 0 : 3_000_000].map((startUs, index) => ({
+              type: 'insertClip' as const,
+              trackId: 'v',
+              clip: {
+                id: `clip-${index}`,
+                kind: 'image' as const,
+                assetId: index ? upper.id : asset.id,
+                startUs,
+                durationUs: 1_000_000,
+              },
+            })),
+          ],
+        });
+        return p.id;
+      } finally {
+        await editor.dispose();
+      }
+    },
+    { base, overlap },
+  );
+  await page
+    .getByRole('button', { name: 'Refresh projects', exact: true })
+    .click();
+  await page
+    .getByRole('main', { name: 'Projects', exact: true })
+    .getByRole('button', { name: /^Input combinations/ })
+    .click();
+  await expect(
+    page.getByRole('main', { name: 'Projects', exact: true }),
+  ).not.toBeVisible();
+  await expect(page.locator('.timeline-clip')).toHaveCount(2);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  return id;
+}
+async function snapshot(
+  page: Page,
+  base: string,
+  id: string,
+): Promise<Project> {
+  return page.evaluate(
+    async ({ base, id }) => {
+      const { createEditor } = (await import(
+        base + 'editor.js'
+      )) as typeof import('../../src/editor');
+      const editor = await createEditor();
+      try {
+        return await editor.projects.snapshot(id);
+      } finally {
+        await editor.dispose();
+      }
+    },
+    { base, id },
+  );
+}
+for (const base of behaviorBases) {
+  test(
+    '@journey ' +
+      [
+        `editor combinations zoom the pointed surface, preserve anchors and pan/scrub ${base}`,
+        `editor combinations preserve text, modal gestures and native clip activation ${base}`,
+        `editor combinations resolve focused properties and palette view commands ${base}`,
+      ].join(' | '),
+    async ({ page }, testInfo) => {
+      const info = testInfo;
+      const sharedProjectId = await prepare(page, base);
+
+      await test.step(`editor combinations zoom the pointed surface, preserve anchors and pan/scrub ${base}`, async () => {
+        const id = sharedProjectId;
+        const timeline = page.locator('.timeline-viewport'),
+          preview = page.locator('.preview-stage');
+        const revision = (await snapshot(page, base, id)).revision;
+        const box = (await timeline.boundingBox())!;
+        const x = box.width * 0.7,
+          y = 18;
+        const timeAtPointer = () =>
+          timeline.evaluate(
+            (element, x) =>
+              (x + element.scrollLeft - 76) / (element.scrollWidth - 76),
+            x,
+          );
+        const anchor = await timeAtPointer();
+        const initialWidth = await timeline.evaluate((e) => e.scrollWidth);
+        await page.mouse.move(box.x + x, box.y + y);
+        await page.keyboard.down('Control');
+        await page.mouse.wheel(0, -140);
+        await page.keyboard.up('Control');
+        await expect
+          .poll(() => timeline.evaluate((e) => e.scrollWidth))
+          .toBeGreaterThan(initialWidth * 1.5);
+        await expect.poll(timeAtPointer).toBeCloseTo(anchor, 2);
+        await expect(page.locator('.preview-stage canvas')).toHaveCSS(
+          'transform',
+          'matrix(1, 0, 0, 1, 0, 0)',
+        );
+        const scroll = await timeline.evaluate((e) => e.scrollLeft);
+        await page.keyboard.down('Shift');
+        await page.mouse.wheel(0, 50);
+        await page.keyboard.up('Shift');
+        await expect
+          .poll(() => timeline.evaluate((e) => e.scrollLeft))
+          .toBeGreaterThan(scroll);
+        const beforePan = await timeline.evaluate((e) => e.scrollLeft);
+        await page.mouse.down({ button: 'middle' });
+        await page.mouse.move(box.x + x - 40, box.y + y);
+        await page.mouse.up({ button: 'middle' });
+        await expect
+          .poll(() => timeline.evaluate((e) => e.scrollLeft))
+          .toBeGreaterThan(beforePan);
+        await timeline.focus();
+        await page.keyboard.press('0');
+        await expect
+          .poll(() => timeline.evaluate((e) => e.scrollWidth))
+          .toBe(initialWidth);
+        await expect.poll(() => timeline.evaluate((e) => e.scrollLeft)).toBe(0);
+        const ruler = (await page.locator('.timeline-ruler').boundingBox())!;
+        await page.mouse.move(
+          ruler.x + ruler.width / 4,
+          ruler.y + ruler.height / 2,
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+          ruler.x + ruler.width / 2,
+          ruler.y + ruler.height / 2,
+        );
+        await page.mouse.up();
+        await expect
+          .poll(async () =>
+            Number(
+              await page
+                .getByRole('slider', { name: 'Playhead position' })
+                .getAttribute('aria-valuenow'),
+            ),
+          )
+          .toBeGreaterThan(1_900_000);
+        await expect
+          .poll(async () =>
+            Number(
+              await page
+                .getByRole('slider', { name: 'Playhead position' })
+                .getAttribute('aria-valuenow'),
+            ),
+          )
+          .toBeLessThan(2_100_000);
+        const playhead = page.getByRole('slider', {
+          name: 'Playhead position',
+          exact: true,
+        });
+        await expect(
+          page.locator('.timeline-scrubber, .timeline input[type="range"]'),
+        ).toHaveCount(0);
+        await playhead.press('Home');
+        await expect(playhead).toHaveAttribute('aria-valuenow', '0');
+        await playhead.press('ArrowRight');
+        await expect(playhead).toHaveAttribute('aria-valuenow', '33333');
+        await playhead.press('Shift+ArrowRight');
+        await expect(playhead).toHaveAttribute('aria-valuenow', '366667');
+        await dragPlayhead(page, 0.75);
+        await expect
+          .poll(async () =>
+            Number(await playhead.getAttribute('aria-valuenow')),
+          )
+          .toBeCloseTo(3_000_000, -4);
+        await expect(
+          page.locator('.timeline-clip[aria-pressed="true"]'),
+        ).toHaveCount(0);
+        // Zoom and scroll, then seek through the same coordinate mapping.
+        await timeline.press('=');
+        await timeline.evaluate((element) => {
+          element.scrollLeft = 80;
+        });
+        await dragPlayhead(page, 0.5);
+        await expect
+          .poll(async () =>
+            Number(await playhead.getAttribute('aria-valuenow')),
+          )
+          .toBeCloseTo(2_000_000, -4);
+        await timeline.press('0');
+        // Capture keeps dragging active beyond the ruler; both ends clamp.
+        await dragPlayhead(page, -0.1);
+        await expect(playhead).toHaveAttribute('aria-valuenow', '0');
+        await dragPlayhead(page, 1.1);
+        await expect(playhead).toHaveAttribute('aria-valuenow', '3999999');
+        expect(await timeline.evaluate((e) => e.scrollWidth)).toBe(
+          initialWidth,
+        );
+        await playhead.press('Home');
+        await playhead.press('End');
+        await expect(playhead).toHaveAttribute('aria-valuenow', '3966667');
+        await dragPlayhead(page, 0.5);
+        const pbox = (await preview.boundingBox())!;
+        const px = Math.round(pbox.x + pbox.width * 0.65) - pbox.x,
+          py = Math.round(pbox.y + pbox.height * 0.4) - pbox.y;
+        const contentAtPointer = () =>
+          preview.locator('canvas').evaluate(
+            (canvas, { px, py }) => {
+              const m = new DOMMatrix(getComputedStyle(canvas).transform);
+              return { x: (px - m.e) / m.a, y: (py - m.f) / m.d, scale: m.a };
+            },
+            { px, py },
+          );
+        const before = await contentAtPointer();
+        await page.mouse.move(pbox.x + px, pbox.y + py);
+        await page.keyboard.down('Control');
+        await page.mouse.wheel(0, -120);
+        await page.keyboard.up('Control');
+        await expect
+          .poll(async () => (await contentAtPointer()).scale)
+          .toBeGreaterThan(1.5);
+        expect((await contentAtPointer()).x).toBeCloseTo(before.x, 2);
+        expect((await contentAtPointer()).y).toBeCloseTo(before.y, 2);
+        expect(await timeline.evaluate((e) => e.scrollWidth)).toBe(
+          initialWidth,
+        );
+        await preview.focus();
+        await page.keyboard.press('=');
+        await expect
+          .poll(async () => (await contentAtPointer()).scale)
+          .toBeGreaterThan(2);
+        await page.mouse.down({ button: 'middle' });
+        await page.mouse.move(pbox.x + px + 30, pbox.y + py + 20);
+        await page.mouse.up({ button: 'middle' });
+        expect((await contentAtPointer()).x).not.toBeCloseTo(before.x, 0);
+        // Reaching minimum zoom after panning must return to the fit transform.
+        await page.mouse.move(pbox.x + px, pbox.y + py);
+        await page.keyboard.down('Control');
+        await page.mouse.wheel(0, 240);
+        await page.mouse.wheel(0, 240);
+        await page.keyboard.up('Control');
+        await expect(preview.locator('canvas')).toHaveCSS(
+          'transform',
+          'matrix(1, 0, 0, 1, 0, 0)',
+        );
+        // Wheel does not commit view transforms or zoom the page.
+        expect((await snapshot(page, base, id)).revision).toBe(revision);
+        expect(await page.evaluate(() => window.visualViewport!.scale)).toBe(1);
+        await page.screenshot({
+          path: info.outputPath('editor-input-views.png'),
+        });
+      });
+      await page
+        .getByRole('slider', { name: 'Playhead position', exact: true })
+        .press('Home');
+      await test.step(`editor combinations preserve text, modal gestures and native clip activation ${base}`, async () => {
+        const id = sharedProjectId;
+        const revision = (await snapshot(page, base, id)).revision;
+        await page
+          .getByRole('main', { name: 'Video editor', exact: true })
+          .focus();
+        await page.keyboard.press('ControlOrMeta+s');
+        await expect(
+          page.getByText('Project saved', { exact: true }),
+        ).toBeVisible();
+        await page.locator('.timeline-clip').first().focus();
+        await page.keyboard.press('Space');
+        await expect(
+          page.locator('.timeline-clip[aria-pressed="true"]'),
+        ).toHaveCount(1);
+        await expect(
+          page.getByRole('button', { name: 'Play preview', exact: true }),
+        ).toBeVisible();
+        await page
+          .getByRole('main', { name: 'Video editor', exact: true })
+          .focus();
+        await page.keyboard.press('n');
+        const input = page.getByLabel('Project name', { exact: true });
+        await input.fill('qws');
+        await input.press('ControlOrMeta+a');
+        await input.press('x');
+        await expect(input).toHaveValue('x');
+        const modalViewWidth = await page
+          .locator('.timeline-viewport')
+          .evaluate((element) => element.scrollWidth);
+        const prevented = await page.locator('.timeline-viewport').evaluate(
+          (element) =>
+            !element.dispatchEvent(
+              new WheelEvent('wheel', {
+                deltaY: -100,
+                ctrlKey: true,
+                bubbles: true,
+                cancelable: true,
+              }),
+            ),
+        );
+        // The page guard blocks browser zoom even while a modal blocks editing gestures.
+        expect(prevented).toBe(true);
+        expect(
+          await page
+            .locator('.timeline-viewport')
+            .evaluate((element) => element.scrollWidth),
+        ).toBe(modalViewWidth);
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        const initial = await page
+          .locator('.timeline-viewport')
+          .evaluate((e) => e.scrollWidth);
+        await page
+          .getByRole('main', { name: 'Video editor', exact: true })
+          .focus();
+        await page.keyboard.press('=');
+        await expect
+          .poll(() =>
+            page.locator('.timeline-viewport').evaluate((e) => e.scrollWidth),
+          )
+          .toBeGreaterThan(initial);
+        await page.keyboard.press('?');
+        const help = page.getByRole('dialog', {
+          name: 'Keyboard shortcuts',
+          exact: true,
+        });
+        await expect(
+          help.getByText('View and mouse', { exact: true }),
+        ).toBeVisible();
+        const last = help.getByText('Commands', { exact: true });
+        await last.scrollIntoViewIfNeeded();
+        await expect(last).toBeVisible();
+        expect((await snapshot(page, base, id)).revision).toBe(revision);
+      });
+      await page.keyboard.press('Escape');
+      await page
+        .getByRole('main', { name: 'Video editor', exact: true })
+        .focus();
+      await page.keyboard.press('Escape');
+      await page.locator('.timeline-viewport').focus();
+      await page.keyboard.press('0');
+      await test.step(`editor combinations resolve focused properties and palette view commands ${base}`, async () => {
+        // Reuse the two original clips and persisted project.
+        const main = page.getByRole('main', {
+          name: 'Video editor',
+          exact: true,
+        });
+        const first = page.locator('[data-clip-id="clip-0"]');
+        const second = page.locator('[data-clip-id="clip-1"]');
+        const properties = page.getByRole('dialog', {
+          name: 'Clip properties',
+          exact: true,
+        });
+        await first.click();
+        await second.focus();
+        await page.keyboard.press('Enter');
+        await expect(
+          properties.getByLabel('Start (seconds)', { exact: true }),
+        ).toHaveValue('3');
+        await page.keyboard.press('Escape');
+        await main.focus();
+        await page.keyboard.press('Escape');
+        await expect(
+          page.locator('.timeline-clip[aria-pressed="true"]'),
+        ).toHaveCount(0);
+        await second.focus();
+        await page.keyboard.press('Enter');
+        await expect(
+          properties.getByLabel('Start (seconds)', { exact: true }),
+        ).toHaveValue('3');
+        await page.keyboard.press('Escape');
+        await main.focus();
+        await page.keyboard.press('ControlOrMeta+a');
+        await page.keyboard.press('ControlOrMeta+g');
+        await expect(
+          page.locator('.timeline-clip[data-grouped="true"]'),
+        ).toHaveCount(2);
+        await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Ungroup clips', exact: true }),
+        ).toBeEnabled();
+        await second.focus();
+        await page.keyboard.press('Enter');
+        await expect(
+          properties.getByLabel('Start (seconds)', { exact: true }),
+        ).toHaveValue('3');
+        await page.keyboard.press('Escape');
+        const timeline = page.locator('.timeline-viewport');
+        const width = () => timeline.evaluate((e) => e.scrollWidth);
+        const initial = await width();
+        const run = async (label: string) => {
+          await main.focus();
+          await page.keyboard.press('ControlOrMeta+k');
+          await page
+            .getByRole('combobox', { name: 'Search commands' })
+            .fill(label);
+          await page.getByRole('option', { name: label, exact: false }).click();
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+        };
+        await run('Zoom timeline in');
+        await expect.poll(width).toBeGreaterThan(initial);
+        const zoomed = await width();
+        await run('Zoom timeline out');
+        await expect.poll(width).toBeLessThan(zoomed);
+        await run('Zoom timeline in');
+        const box = (await timeline.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + 18);
+        await page.mouse.down({ button: 'middle' });
+        await page.mouse.move(box.x + box.width / 2 - 40, box.y + 18);
+        await page.mouse.up({ button: 'middle' });
+        await expect
+          .poll(() => timeline.evaluate((e) => e.scrollLeft))
+          .toBeGreaterThan(0);
+        await run('Fit timeline');
+        await expect.poll(width).toBe(initial);
+        await expect.poll(() => timeline.evaluate((e) => e.scrollLeft)).toBe(0);
+      });
+    },
+  );
+
+  test(`editor combinations nudge preserves overlapping native frame layers ${base}`, async ({
+    page,
+  }) => {
+    const id = await prepare(page, base, true);
+    const pixel = () =>
+      page.evaluate(
+        async ({ base, id }) => {
+          const { createEditor } = (await import(
+            base + 'editor.js'
+          )) as typeof import('../../src/editor');
+          const editor = await createEditor();
+          try {
+            const frame = await editor.preview.frame(id, 500_000, {
+              width: 128,
+              height: 72,
+            }).completion;
+            const canvas = new OffscreenCanvas(128, 72);
+            const context = canvas.getContext('2d')!;
+            context.drawImage(frame.image, 0, 0);
+            frame.image.close();
+            return [...context.getImageData(64, 36, 1, 1).data];
+          } finally {
+            await editor.dispose();
+          }
+        },
+        { base, id },
+      );
+    expect(await pixel()).toEqual([255, 0, 0, 255]);
+    // The upper overlapping clip covers the lower clip's mouse target.
+    await page.locator('[data-clip-id="clip-0"]').focus();
+    await page.keyboard.press('Space');
+    await page.getByRole('main', { name: 'Video editor', exact: true }).focus();
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect
+      .poll(
+        async () =>
+          (await snapshot(page, base, id)).tracks[0]!.clips.find(
+            (c) => c.id === 'clip-0',
+          )!.startUs,
+      )
+      .toBe(33333);
+    expect(
+      (await snapshot(page, base, id)).tracks[0]!.clips.map((c) => c.id),
+    ).toEqual(['clip-0', 'clip-1']);
+    // Await a fresh native frame from the persisted revision, not a stale canvas.
+    expect(await pixel()).toEqual([255, 0, 0, 255]);
+  });
+
+  test(`editor combinations clipboard, nudge, trim, boundary and ripple are persisted ${base}`, async ({
+    page,
+  }) => {
+    const id = await prepare(page, base),
+      main = page.getByRole('main', { name: 'Video editor', exact: true });
+    const clips = async () =>
+      (await snapshot(page, base, id)).tracks.flatMap((t) => t.clips);
+    await main.focus();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(
+      page.locator('.timeline-clip[aria-pressed="true"]'),
+    ).toHaveCount(2);
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('ControlOrMeta+x');
+    await expect.poll(async () => (await clips()).length).toBe(0);
+    await main.focus();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ControlOrMeta+v');
+    await expect.poll(async () => (await clips()).length).toBe(2);
+    expect((await clips()).map((c) => c.id)).not.toContain('clip-0');
+    await main.focus();
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect
+      .poll(async () =>
+        (await clips()).map((c) => c.startUs).sort((a, b) => a - b),
+      )
+      .toEqual([33333, 3033333]);
+    await main.focus();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect
+      .poll(async () =>
+        (await clips()).map((c) => c.startUs).sort((a, b) => a - b),
+      )
+      .toEqual([0, 3_000_000]);
+    await main.focus();
+    await page.keyboard.press('Escape');
+    await expect(
+      page.locator('.timeline-clip[aria-pressed="true"]'),
+    ).toHaveCount(0);
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      page.getByRole('slider', { name: 'Playhead position' }),
+    ).toHaveAttribute('aria-valuenow', '1000000');
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      page.getByRole('slider', { name: 'Playhead position' }),
+    ).toHaveAttribute('aria-valuenow', '3000000');
+    await page.keyboard.press('ArrowUp');
+    await expect(
+      page.getByRole('slider', { name: 'Playhead position' }),
+    ).toHaveAttribute('aria-valuenow', '1000000');
+    await page.locator('.timeline-clip').first().click();
+    await main.focus();
+    await page.keyboard.press('Home');
+    for (let i = 0; i < 15; i++) await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('w');
+    await expect
+      .poll(
+        async () => (await clips()).find((c) => c.startUs === 0)?.durationUs,
+      )
+      .toBe(500_000);
+    await page.locator('.timeline-clip').first().click();
+    await main.focus();
+    await page.keyboard.press('Shift+Delete');
+    await expect.poll(async () => (await clips()).length).toBe(1);
+    expect((await clips())[0]!.startUs).toBe(2_500_000);
+    await main.focus();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(async () => (await clips()).length).toBe(2);
+    await page.locator('.timeline-clip').first().dblclick();
+    await expect(
+      page.getByRole('dialog', { name: 'Clip properties', exact: true }),
+    ).toBeVisible();
+    const before = (await snapshot(page, base, id)).revision;
+    await page.keyboard.press('ControlOrMeta+x');
+    await page.keyboard.press('Shift+Delete');
+    expect((await snapshot(page, base, id)).revision).toBe(before);
+    await page.keyboard.press('Escape');
+    await page.locator('.timeline-clip').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByRole('dialog', { name: 'Clip properties', exact: true }),
+    ).toBeVisible();
+  });
+}
+
+for (const base of behaviorBases) {
+  test(`timeline snapping remembers its toggle and direct edits show results without success toasts ${base}`, async ({
+    page,
+    context,
+  }, testInfo) => {
+    const id = await prepare(page, base);
+    await page.evaluate(
+      async ({ base, id }) => {
+        const { createEditor } = (await import(
+          base + 'editor.js'
+        )) as typeof import('../../src/editor');
+        const editor = await createEditor();
+        try {
+          const project = await editor.projects.snapshot(id);
+          await editor.commands.apply({
+            projectId: id,
+            requestId: crypto.randomUUID(),
+            expectedRevision: project.revision,
+            operations: [
+              { type: 'addTrack', track: { id: 'titles', kind: 'overlay' } },
+              {
+                type: 'insertClip',
+                trackId: 'titles',
+                clip: {
+                  id: 'title',
+                  kind: 'text',
+                  startUs: 2_000_000,
+                  durationUs: 500_000,
+                  text: { text: 'Snap title' },
+                },
+              },
+            ],
+          });
+        } finally {
+          await editor.dispose();
+        }
+      },
+      { base, id },
+    );
+    await page.reload();
+    await expect(page.locator('.timeline-clip')).toHaveCount(3);
+    const revision = (await snapshot(page, base, id)).revision;
+    const toggle = page.getByRole('button', { name: 'Snapping', exact: true });
+    const handle = page.getByRole('slider', {
+      name: 'Playhead position',
+      exact: true,
+    });
+    const timeline = page.locator('.timeline-viewport');
+    const value = async () =>
+      Number(await handle.getAttribute('aria-valuenow'));
+    const seekNear = async (timeUs: number, offset: number) => {
+      await handle.press('Home');
+      const box = (await page.locator('.timeline-ruler').boundingBox())!;
+      await page.mouse.click(
+        box.x + (box.width * timeUs) / 4_000_000 + offset,
+        box.y + 4,
+      );
+    };
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await seekNear(1_000_000, 6);
+    await expect(handle).toHaveAttribute('aria-valuenow', '1000000');
+    await seekNear(3_000_000, -6);
+    await expect(handle).toHaveAttribute('aria-valuenow', '3000000');
+    for (const edge of [2_000_000, 2_500_000]) {
+      await seekNear(edge, 6);
+      await expect(handle).toHaveAttribute('aria-valuenow', String(edge));
+    }
+    await seekNear(1_000_000, 12);
+    expect(await value()).toBeGreaterThan(1_000_000);
+    await dragPlayhead(page, 0.251);
+    await expect(handle).toHaveAttribute('aria-valuenow', '1000000');
+    // Frame stepping remains precise even inside the snap radius.
+    await handle.press('ArrowRight');
+    await expect(handle).toHaveAttribute('aria-valuenow', '1033333');
+    // Empty-lane clicks use the same points without selecting/editing a clip.
+    const lane = page.locator('.track-lane').first();
+    const box = (await lane.boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.5 + 6, box.y + box.height / 2);
+    await expect(handle).toHaveAttribute('aria-valuenow', '2000000');
+    await timeline.press('=');
+    await timeline.evaluate((element) => {
+      element.scrollLeft = 80;
+    });
+    await seekNear(1_000_000, 6);
+    await expect(handle).toHaveAttribute('aria-valuenow', '1000000');
+    await seekNear(1_000_000, 12);
+    expect(await value()).toBeGreaterThan(1_000_000);
+    await timeline.press('0');
+    for (const size of ['Small (75%)', 'Large (125%)']) {
+      await page
+        .getByRole('button', { name: 'Workspace settings', exact: true })
+        .click();
+      await page
+        .getByRole('menuitem', { name: 'Appearance', exact: true })
+        .click();
+      await page.getByRole('combobox', { name: 'Interface size' }).click();
+      await page.getByRole('option', { name: size, exact: true }).click();
+      await page.getByRole('button', { name: 'Close appearance' }).click();
+      // ResizeObserver publishes the new fit width after appearance changes.
+      await expect
+        .poll(() =>
+          timeline.evaluate((element) =>
+            Math.abs(
+              element.querySelector('.timeline-content')!.clientWidth -
+                element.clientWidth,
+            ),
+          ),
+        )
+        .toBeLessThanOrEqual(1);
+      await seekNear(1_000_000, 6);
+      await expect(handle).toHaveAttribute('aria-valuenow', '1000000');
+      await seekNear(1_000_000, 12);
+      expect(await value()).toBeGreaterThan(1_000_000);
+    }
+    expect((await snapshot(page, base, id)).revision).toBe(revision);
+    const other = await secondaryTab(context, page);
+    await other.goto(page.url());
+    const otherToggle = other.getByRole('button', {
+      name: 'Snapping',
+      exact: true,
+    });
+    await expect(otherToggle).toHaveAttribute('aria-pressed', 'true');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(otherToggle).toHaveAttribute('aria-pressed', 'false');
+    await seekNear(1_000_000, 6);
+    expect(await value()).toBeGreaterThan(1_000_000);
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await seekNear(1_000_000, 6);
+    expect(await value()).toBeGreaterThan(1_000_000);
+    await toggle.click();
+    await expect(otherToggle).toHaveAttribute('aria-pressed', 'true');
+    await other.close();
+    await page.locator('[data-clip-id="clip-0"]').click();
+    await dragPlayhead(page, 0.125);
+    await page.getByRole('button', { name: 'Split clip', exact: true }).click();
+    await expect(page.locator('.timeline-clip')).toHaveCount(4);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(page.locator('.timeline-clip')).toHaveCount(3);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await expect(page.locator('.timeline-clip')).toHaveCount(4);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Delete clip', exact: true })
+      .click();
+    await expect(page.locator('.timeline-clip')).toHaveCount(3);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Add track', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Audio track', exact: true })
+      .click();
+    await expect(page.locator('.timeline-track')).toHaveCount(3);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await page.screenshot({
+      path: testInfo.outputPath('timeline-snapping.png'),
+    });
+  });
+  test(`playhead dragging recovers after deleting and restoring tracks ${base}`, async ({
+    page,
+  }) => {
+    const id = await prepare(page, base);
+    const original = (await snapshot(page, base, id)).tracks;
+    const main = page.getByRole('main', { name: 'Video editor', exact: true });
+    const handle = page.getByRole('slider', {
+      name: 'Playhead position',
+      exact: true,
+    });
+    await main.press('ControlOrMeta+a');
+    await expect(
+      page.locator('.timeline-clip[aria-pressed="true"]'),
+    ).toHaveCount(2);
+    const hit = (await handle.boundingBox())!;
+    await page.mouse.move(hit.x + hit.width / 2, hit.y + hit.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(hit.x + hit.width / 2 + 10, hit.y + hit.height / 2);
+    // Deleting while capture is held removes the slider before pointerup.
+    await page.keyboard.press('Delete');
+    await expect(handle).toHaveCount(0);
+    await page.mouse.up();
+    await main.press('ControlOrMeta+z');
+    await expect(page.locator('.timeline-clip')).toHaveCount(2);
+    await handle.press('Home');
+    await dragPlayhead(page, 0.5);
+    await expect
+      .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
+      .toBeCloseTo(2_000_000, -4);
+    expect((await snapshot(page, base, id)).tracks).toEqual(original);
+  });
+}
+
+test.describe('touch playhead dragging', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  for (const base of behaviorBases) {
+    test(`playhead marker seeks with touch and cancels without editing ${base}`, async ({
+      page,
+    }, testInfo) => {
+      const id = await prepare(page, base);
+      const revision = (await snapshot(page, base, id)).revision;
+      const handle = page.getByRole('slider', {
+        name: 'Playhead position',
+        exact: true,
+      });
+      await handle.press('Home');
+      await handle.scrollIntoViewIfNeeded();
+      const hit = (await handle.boundingBox())!;
+      expect(hit.width).toBeGreaterThanOrEqual(44);
+      expect(hit.height).toBeGreaterThanOrEqual(44);
+      await expect(page.locator('.timeline-scrubber')).toHaveCount(0);
+      const ruler = (await page.locator('.timeline-ruler').boundingBox())!;
+      const client = await page.context().newCDPSession(page);
+      const start = { x: hit.x + hit.width / 2 + 8, y: hit.y + hit.height / 2 };
+      const touch = async (
+        type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel',
+        x = start.x,
+        y = start.y,
+      ) => {
+        await client.send('Input.dispatchTouchEvent', {
+          type,
+          touchPoints:
+            type === 'touchEnd' || type === 'touchCancel'
+              ? []
+              : [{ x, y, id: 1 }],
+        });
+      };
+      await touch('touchStart');
+      await expect(handle).toHaveAttribute('aria-valuenow', '0');
+      // Move off the top handle into a clip: pointer capture must retain seeking.
+      await touch('touchMove', start.x + ruler.width / 4, start.y + 60);
+      await touch('touchEnd');
+      await expect
+        .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
+        .toBeCloseTo(1_000_000, -4);
+      await expect(
+        page.locator('.timeline-clip[aria-pressed="true"]'),
+      ).toHaveCount(0);
+      await handle.press('Home');
+      await touch('touchStart');
+      await touch('touchMove', start.x + ruler.width / 8, start.y);
+      await touch('touchCancel');
+      const cancelled = await handle.getAttribute('aria-valuenow');
+      // A hover/move after cancellation cannot keep scrubbing.
+      await page.mouse.move(start.x + ruler.width / 2, start.y);
+      await expect(handle).toHaveAttribute('aria-valuenow', cancelled!);
+      await handle.press('Home');
+      await touch('touchStart');
+      await touch('touchMove', start.x + ruler.width / 4, start.y);
+      await touch('touchEnd');
+      await expect
+        .poll(async () => Number(await handle.getAttribute('aria-valuenow')))
+        .toBeCloseTo(1_000_000, -4);
+      expect((await snapshot(page, base, id)).revision).toBe(revision);
+      await page.screenshot({
+        path: testInfo.outputPath('mobile-playhead.png'),
+      });
+      await client.detach();
+    });
+  }
+});
