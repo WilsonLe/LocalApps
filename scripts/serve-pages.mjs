@@ -17,12 +17,13 @@ const types = {
   ".png": "image/png",
   ".woff2": "font/woff2",
   ".woff": "font/woff",
+  ".wasm": "application/wasm",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".ogg": "audio/ogg",
 };
 const port = Number(process.env.PORT ?? 4188);
-createServer(async (request, response) => {
+export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
     if (url.pathname === "/" || url.pathname === base.slice(0, -1)) {
@@ -51,6 +52,12 @@ createServer(async (request, response) => {
   } catch {
     response.writeHead(404).end("Not found");
   }
-}).listen(port, "127.0.0.1", () =>
-  console.log(`LocalApps: http://127.0.0.1:${port}${base}`),
-);
+});
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  server.listen(port, "127.0.0.1", () =>
+    console.log(`LocalApps: http://127.0.0.1:${port}${base}`),
+  );
+}

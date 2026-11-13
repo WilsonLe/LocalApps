@@ -1,13 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
+import { server } from "../scripts/serve-pages.mjs";
 
 const output = new URL("../dist/", import.meta.url);
 const { base, apps } = JSON.parse(
   await readFile(new URL("release.json", output), "utf8"),
 );
 const fallback = await readFile(new URL("route-fallback.js", output), "utf8");
+
+test("preview supports WebAssembly streaming for the font engine", async (t) => {
+  await new Promise((ready) => server.listen(0, "127.0.0.1", ready));
+  t.after(() => new Promise((closed) => server.close(closed)));
+  const assets = await readdir(new URL("LocalDesign/assets/", output));
+  const wasm = assets.find((name) => name.endsWith(".wasm"));
+  assert.ok(wasm, "The font engine must ship its WebAssembly module");
+  const response = await fetch(
+    `http://127.0.0.1:${server.address().port}${apps.LocalDesign.path}assets/${wasm}`,
+  );
+  assert.equal(response.headers.get("content-type"), "application/wasm");
+  assert.ok(
+    (await WebAssembly.compileStreaming(response)) instanceof
+      WebAssembly.Module,
+  );
+});
 
 function navigate(source, href) {
   const location = new URL(href);
