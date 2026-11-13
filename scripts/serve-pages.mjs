@@ -26,7 +26,10 @@ const port = Number(process.env.PORT ?? 4188);
 export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
-    if (url.pathname === "/" || url.pathname === base.slice(0, -1)) {
+    if (
+      base !== "/" &&
+      (url.pathname === "/" || url.pathname === base.slice(0, -1))
+    ) {
       response.writeHead(302, { Location: base + url.search + url.hash }).end();
       return;
     }
