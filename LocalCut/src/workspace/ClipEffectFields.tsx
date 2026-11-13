@@ -1,3 +1,4 @@
+import { FieldSet } from '@localapps/ui/field';
 import { Checkbox } from '@localapps/ui/checkbox';
 import { useEffect, useRef, useState } from 'react';
 import { COLOR_PRESETS, BLEND_MODES, parseCube } from '../core/effects';
@@ -128,7 +129,7 @@ export function ClipEffectFields({
   );
   return (
     <>
-      <fieldset disabled={disabled || tracking} className="grid gap-3">
+      <FieldSet disabled={disabled || tracking} className="grid gap-3">
         {visual && (
           <TabsContent value="color" data-properties-tab="color" keepMounted>
             <div className="grid gap-3">
@@ -601,7 +602,7 @@ export function ClipEffectFields({
             {status}
           </p>
         )}
-      </fieldset>
+      </FieldSet>
       {tracking && (
         <Button
           type="button"

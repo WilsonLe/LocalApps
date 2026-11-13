@@ -46,7 +46,7 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           aria-label={label}
-          className="block size-4 shrink-0 rounded-full border border-primary bg-background shadow-sm ring-ring/50 transition-[color,box-shadow] select-none hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+          className="block size-4 shrink-0 rounded-full border border-primary bg-background shadow-sm ring-ring/50 transition-[color,box-shadow] select-none hover:ring-4 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-foreground disabled:pointer-events-none disabled:opacity-50"
         />
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>

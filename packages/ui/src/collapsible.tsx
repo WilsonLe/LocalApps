@@ -35,15 +35,24 @@ export function CollapsibleDisclosure({
   summary,
   children,
   defaultOpen = false,
+  open,
+  onOpenChange,
   className,
 }: {
   summary: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
+  open?: CollapsiblePrimitive.Root.Props["open"];
+  onOpenChange?: CollapsiblePrimitive.Root.Props["onOpenChange"];
   className?: string;
 }) {
   return (
-    <Collapsible defaultOpen={defaultOpen} className={className}>
+    <Collapsible
+      defaultOpen={defaultOpen}
+      open={open}
+      onOpenChange={onOpenChange}
+      className={className}
+    >
       <CollapsibleTrigger className="group flex min-h-10 w-full items-center gap-3 rounded-md py-2 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="min-w-0 flex-1">{summary}</span>
         <ChevronDown

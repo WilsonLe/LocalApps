@@ -1,3 +1,4 @@
+import { FieldSet, FieldLegend } from '@localapps/ui/field';
 import { Label } from '@localapps/ui/label';
 import { useEffect, useRef } from 'react';
 import { Moon, Monitor, Sun, Shuffle, RotateCcw, X } from 'lucide-react';
@@ -110,8 +111,8 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
           })}
         </div>
         {picker('base')}
-        <fieldset className="appearance-field">
-          <legend>Theme</legend>
+        <FieldSet className="appearance-field gap-0">
+          <FieldLegend className="mb-0">Theme</FieldLegend>
           <div className="appearance-swatches">
             {appearanceOptions.theme.map((theme) => {
               const [chroma, hue, light] = themeColors[theme];
@@ -133,7 +134,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
-        </fieldset>
+        </FieldSet>
         <div className="appearance-divider" />
         {picker('interfaceSize')}
         <AppearanceFontPicker

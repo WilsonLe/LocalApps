@@ -1,3 +1,4 @@
+import { Progress as ProgressBar } from '@localapps/ui/progress';
 import type { Mask } from '../core/effects';
 import type { Job } from '../editor';
 import type { MaskTrackingResult } from '../media/mask-tracking';
@@ -305,19 +306,9 @@ function ProgressView({ progress }: { progress: Progress }) {
   return progress.fraction === undefined ? (
     <LoaderCircle aria-label={progress.label} className="animate-spin" />
   ) : (
-    <div
-      role="progressbar"
+    <ProgressBar
       aria-label={progress.label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(progress.fraction * 100)}
-      className="job-progress"
-    >
-      <div
-        style={{
-          width: `${Math.max(0, Math.min(1, progress.fraction)) * 100}%`,
-        }}
-      />
-    </div>
+      value={Math.round(progress.fraction * 100)}
+    />
   );
 }

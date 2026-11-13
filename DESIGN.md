@@ -16,7 +16,7 @@ artwork or media. The LocalDesign adapter keeps unavailable toolbar actions
 visible and defaults to compact controls. LocalCut's action adapter hides an
 unavailable action when its workspace policy calls for that. The shared Button
 retains disabled state by default. For custom timeline hit targets, `bare` keeps
-button semantics and lets the editor own geometry. The shared Input preserves
+button semantics and lets the editor own geometry. The shared Input styles visible file fields and preserves
 browser-native file, folder and color picker behavior. Canvas and media elements
 and the third-party storyboard keep their own runtime contracts.
 

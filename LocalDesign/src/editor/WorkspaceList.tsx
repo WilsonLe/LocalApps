@@ -1,6 +1,7 @@
+import { Spinner } from "@localapps/ui/spinner";
 import { Empty, EmptyTitle } from "@localapps/ui/empty";
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, LoaderCircle, Trash2 } from "lucide-react";
+import { FolderOpen, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   AlertDialog,
@@ -110,7 +111,7 @@ export function WorkspaceList({
         )}
         {loading || (!documents && !listError) ? (
           <Empty className="workspace-empty" role="status">
-            <LoaderCircle size={24} />
+            <Spinner aria-hidden="true" className="size-6" />
             Loading workspaces…
           </Empty>
         ) : documents?.length ? (

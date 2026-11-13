@@ -1,3 +1,4 @@
+import { FieldSet, FieldLegend } from '@localapps/ui/field';
 import { Progress } from '@localapps/ui/progress';
 import { Input } from '@localapps/ui/input';
 import { useEffect, useRef, useState } from 'react';
@@ -371,8 +372,13 @@ export default function WorkspaceTransferDialog({
           >
             {!projectOnly &&
               (backup.settings?.appearance || backup.settings?.workspace) && (
-                <fieldset disabled={pending}>
-                  <legend className="text-sm font-medium">Settings</legend>
+                <FieldSet disabled={pending} className="gap-0">
+                  <FieldLegend
+                    variant="label"
+                    className="mb-0 text-sm font-medium"
+                  >
+                    Settings
+                  </FieldLegend>
                   {backup.settings?.appearance && (
                     <Choice
                       disabled={pending}
@@ -391,10 +397,13 @@ export default function WorkspaceTransferDialog({
                       Workspace preferences
                     </Choice>
                   )}
-                </fieldset>
+                </FieldSet>
               )}
-            <fieldset disabled={pending}>
-              <legend className="flex w-full items-center justify-between text-sm font-medium">
+            <FieldSet disabled={pending} className="gap-0">
+              <FieldLegend
+                variant="label"
+                className="mb-0 flex w-full items-center justify-between text-sm font-medium"
+              >
                 <span>
                   {projectOnly ? 'Project' : 'Projects'} ({projects.length}/
                   {backup.projects.length})
@@ -419,7 +428,7 @@ export default function WorkspaceTransferDialog({
                     </Button>
                   </span>
                 )}
-              </legend>
+              </FieldLegend>
               {backup.projects.map((p) => (
                 <Choice
                   disabled={pending}
@@ -452,9 +461,11 @@ export default function WorkspaceTransferDialog({
                   Include project versions
                 </Choice>
               )}
-            </fieldset>
-            <fieldset disabled={pending}>
-              <legend className="text-sm font-medium">Source files</legend>
+            </FieldSet>
+            <FieldSet disabled={pending} className="gap-0">
+              <FieldLegend variant="label" className="mb-0 text-sm font-medium">
+                Source files
+              </FieldLegend>
               <Choice
                 checked={includeAssets}
                 onChange={setIncludeAssets}
@@ -490,7 +501,7 @@ export default function WorkspaceTransferDialog({
                     Missing originals can only be exported as metadata.
                   </p>
                 )}
-            </fieldset>
+            </FieldSet>
           </div>
         )}
         {pending && (

@@ -968,16 +968,6 @@
 .media-symbol svg {
   width: 18px;
 }
-.job-progress {
-  height: 5px;
-  background: var(--muted);
-  overflow: hidden;
-  border-radius: calc(var(--radius) * 0.5);
-}
-.job-progress > div {
-  background: var(--foreground);
-  height: 100%;
-}
 .project-list {
   display: grid;
   gap: 8px;

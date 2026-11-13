@@ -36,11 +36,27 @@ export function uiViolations(text, path) {
   function visit(node) {
     if (
       (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      /^(button|input|select|textarea|label|progress|dialog|table)$/.test(
+      /^(button|input|select|textarea|label|progress|dialog|table|details|summary|fieldset|legend)$/.test(
         node.tagName.getText(source),
       )
     )
       report(node, "Use the matching @localapps/ui component.");
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      ts.isIdentifier(node.tagName) &&
+      /^[a-z]/.test(node.tagName.text)
+    ) {
+      for (const attribute of node.attributes.properties) {
+        if (
+          ts.isJsxAttribute(attribute) &&
+          attribute.name.getText(source) === "role" &&
+          attribute.initializer &&
+          ts.isStringLiteral(attribute.initializer) &&
+          /^(progressbar|tablist|tab)$/.test(attribute.initializer.text)
+        )
+          report(node, "Use shared Progress or Tabs for this control role.");
+      }
+    }
     const specifier =
       ts.isImportDeclaration(node) || ts.isExportDeclaration(node)
         ? node.moduleSpecifier

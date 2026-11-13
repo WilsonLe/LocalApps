@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { CollapsibleDisclosure } from '@localapps/ui/collapsible';
 import {
   CheckCircle2,
   CircleAlert,
@@ -24,6 +25,8 @@ export default function BrowserAgentDialog({ onClose }: { onClose(): void }) {
   const refreshing = scopes.some((scope) => scope.phase === 'registering');
   const ready =
     scopes.length > 0 && scopes.every((scope) => scope.phase === 'ready');
+  const [instructions, setInstructions] = useState({ ready, open: !ready });
+  if (instructions.ready !== ready) setInstructions({ ready, open: !ready });
   const count = scopes.reduce((total, scope) => total + scope.count, 0);
   const Icon = refreshing ? LoaderCircle : ready ? CheckCircle2 : CircleAlert;
   return (
@@ -81,10 +84,12 @@ export default function BrowserAgentDialog({ onClose }: { onClose(): void }) {
             {error}
           </p>
         ))}
-        <details open={!ready} className="text-sm">
-          <summary className="cursor-pointer font-medium">
-            Connect or reconnect
-          </summary>
+        <CollapsibleDisclosure
+          open={instructions.open}
+          onOpenChange={(open) => setInstructions({ ready, open })}
+          summary="Connect or reconnect"
+          className="text-sm"
+        >
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted-foreground">
             <li>Open LocalCut in your agent’s browser.</li>
             <li>
@@ -110,7 +115,7 @@ export default function BrowserAgentDialog({ onClose }: { onClose(): void }) {
           >
             Browser setup guide
           </a>
-        </details>
+        </CollapsibleDisclosure>
         <DialogFooter>
           <Button
             type="button"

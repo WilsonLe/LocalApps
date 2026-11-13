@@ -1,5 +1,9 @@
 import { Slider } from '@localapps/ui/slider';
-import { Label } from '@localapps/ui/label';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@localapps/ui/collapsible';
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
@@ -202,23 +206,22 @@ export default function SoundEffectsDialog({
               ? `${catalog.sounds.length} sounds · CC0 · No credit required`
               : 'CC0 sound library'}
           </span>
-          <Label className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Volume2 className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Preview volume</span>
             <Slider
               label="Preview volume"
               min={0}
               max={1}
               step={0.05}
               value={volume}
-              className="max-w-24"
+              className="data-horizontal:w-24"
               onValueChange={(next) => {
                 previewVolume.current = next;
                 setVolume(next);
                 if (audio.current) audio.current.volume = next;
               }}
             />
-          </Label>
+          </div>
         </div>
         <audio
           ref={audio}
@@ -314,33 +317,41 @@ export default function SoundEffectsDialog({
                           {source.creator}
                         </a>
                       </p>
-                      <details className="mt-0.5 text-xs text-muted-foreground">
-                        <summary
-                          className="cursor-pointer truncate"
+                      <Collapsible className="mt-0.5 text-xs text-muted-foreground">
+                        <CollapsibleTrigger
+                          render={<Button bare />}
+                          className="group flex max-w-full cursor-pointer items-center gap-1 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-ring"
                           aria-label={`Tags for ${sound.name}`}
                         >
-                          {sound.tags.slice(0, 4).join(' · ')}
-                        </summary>
-                        <div
-                          className="flex flex-wrap gap-1 py-1"
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="size-3 shrink-0 group-aria-expanded:rotate-90"
+                          />
+                          <span className="truncate">
+                            {sound.tags.slice(0, 4).join(' · ')}
+                          </span>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent
                           aria-label={`All tags for ${sound.name}`}
                         >
-                          {sound.tags.map((tag) => (
-                            <Button
-                              key={tag}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-1.5 text-xs"
-                              onClick={() => {
-                                setQuery(tag);
-                                navigate(0);
-                              }}
-                            >
-                              {tag}
-                            </Button>
-                          ))}
-                        </div>
-                      </details>
+                          <div className="flex flex-wrap gap-1 py-1">
+                            {sound.tags.map((tag) => (
+                              <Button
+                                key={tag}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-1.5 text-xs"
+                                onClick={() => {
+                                  setQuery(tag);
+                                  navigate(0);
+                                }}
+                              >
+                                {tag}
+                              </Button>
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
                     <Button
                       variant="outline"
