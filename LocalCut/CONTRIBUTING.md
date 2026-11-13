@@ -4,7 +4,7 @@ Thank you for helping improve LocalCut. Documentation, bug reproduction, accessi
 
 ## Find a useful starting point
 
-Read the [README](README.md), try the [first-edit guide](docs/getting-started.md), and search [existing issues](https://github.com/WilsonLe/LocalCut/issues) and [pull requests](https://github.com/WilsonLe/LocalCut/pulls) before starting. An issue is not assigned work unless a maintainer agrees; ask on the issue before investing in a substantial change. Small documentation fixes and focused reproductions are good first contributions. Do not assume an unlabelled issue is beginner-friendly.
+Read the [README](README.md), try the [first-edit guide](docs/getting-started.md), and search [existing issues](https://github.com/WilsonLe/LocalApps/issues) and [pull requests](https://github.com/WilsonLe/LocalApps/pulls) before starting. An issue is not assigned work unless a maintainer agrees; ask on the issue before investing in a substantial change. Small documentation fixes and focused reproductions are good first contributions. Do not assume an unlabelled issue is beginner-friendly.
 
 Open or reuse a tracking issue before implementation. Describe the user problem, expected result and acceptance evidence. For new features, agree on scope and the existing module that should own the behavior. Keep unrelated refactors out of that change. See the [roadmap](docs/roadmap.md) for priorities, and [SUPPORT.md](SUPPORT.md) for what makes a useful report. Report security concerns through [SECURITY.md](SECURITY.md).
 
@@ -16,8 +16,8 @@ Work on a focused branch in an isolated worktree, leaving your regular checkout 
 
 ```sh
 git fetch origin main
-git worktree add -b codex/short-description ../LocalCut.worktrees/short-description origin/main
-cd ../LocalCut.worktrees/short-description
+git worktree add -b codex/short-description ../LocalApps.worktrees/short-description origin/main
+cd ../LocalApps.worktrees/short-description
 pnpm install --frozen-lockfile
 ```
 
@@ -30,7 +30,7 @@ Read [AGENTS.md](AGENTS.md), [user preferences](docs/user-preferences.md), and e
 - Keep project edits in the shared engine. UI controls call its public APIs; do not duplicate editing state in components.
 - Preserve stable IDs, transactional edits, revisions, Undo/Redo, cancellation and owned storage cleanup. Treat saved-project and backup compatibility as public contracts.
 - Keep local workflows local. No built-in AI/provider features remain; external agents supply STT/TTS through the [speech contract](docs/transcription.md).
-- Use existing shadcn/Base UI primitives and semantic styling. Preserve keyboard interaction, focus, text entry, accessible names and reduced-motion behavior.
+- Use the [LocalApps design system](../DESIGN.md) for shadcn/Base UI primitives and semantic styling. Preserve keyboard interaction, focus, text entry, accessible names and reduced-motion behavior.
 - Preserve both `/` and `/LocalCut/` hosting. Keep native codec and export evidence real; mocks may isolate transport behavior but do not prove native acceptance.
 - Keep dependency versions exact. Include license/provenance and artifact hashes for bundled assets. Do not add personal media, tokens, private logs or local environment files to Git.
 

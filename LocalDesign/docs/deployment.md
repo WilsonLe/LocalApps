@@ -1,12 +1,19 @@
-# GitHub Pages delivery
+# LocalDesign on GitHub Pages
 
-The sole deployment target is https://wilsonle.github.io/LocalDesign/ from `WilsonLe/LocalDesign` main. Vite's base is `/LocalDesign/`. No server, runtime credentials, design uploads or environment secrets are required. Local browser documents do not sync between origins/devices. The build emits `404.html` from the exact built app entry so GitHub Pages can serve direct `/LocalDesign/workspace/<id>` links with the correct absolute asset base. GitHub Pages uses HTTP 404 for that fallback even though the app opens the local workspace; Vite preview uses its own SPA fallback. Verify the actual fallback body/assets as well as UI navigation after deployment.
+LocalDesign is served at [LocalApps/LocalDesign](https://wilsonle.github.io/LocalApps/LocalDesign/).
+The [LocalApps Pages runbook](../../README.md#validation-and-github-pages) owns
+the deployment, artifact base, review and rollback. The imported standalone
+workflow under LocalDesign is not executed by this repository.
 
-1. Run `npm ci` on the version in `.nvmrc`; `npm run check` builds, checks skills/types, runs core/file contracts and Playwright Chromium journeys on the built preview. Install the test browser with `npx playwright install --with-deps chromium` on a new CI host.
-2. Open the linked draft PR, complete one bounded independent review/address cycle and check the current committed base/head. Obtain user merge/deployment authority; the initial project request explicitly includes both for GitHub Pages. Do not bypass hosted checks/protection.
-3. Enable GitHub Pages with source GitHub Actions in repository settings (or `gh api --method POST repos/WilsonLe/LocalDesign/pages -f build_type=workflow` if it has no configuration). This changes only this repository's declared target.
-4. Merge the reviewed PR. `.github/workflows/pages.yml` checks and builds the actual main revision, uploads a Pages artifact and deploys through the github-pages environment. The Pages token is scoped to the deployment job; application code receives no token. Feature PR checks never deploy.
-5. Read the workflow result and environment deployment record for the merge SHA. Open the live URL, inspect `/LocalDesign/release.json` for its SHA, verify blank manual drawing/inspector, skill retrieval and actual tool discovery/edit/export using a WebMCP-capable browser. A deployed status or HTTP 200 alone is insufficient.
-6. Synchronize the canonical checkout with `git pull --ff-only`. Remove only task-owned stopped runtimes/worktrees when safe; retain evidence outside Git. Never clear user browser storage.
+Use the Node and pnpm versions from the LocalApps workspace and run
+`pnpm --dir LocalDesign exec playwright install chromium` from its root before
+running the editor's full local check. Use the combined production preview to
+verify portal navigation and direct workspace reloads. For a standalone
+LocalDesign preview, run `pnpm --dir LocalDesign build` and
+`pnpm --dir LocalDesign preview` from the root.
 
-Rollback: revert the implementation commit through a reviewed PR and redeploy main, or dispatch the last-known-good workflow revision as appropriate. With this initial release, no prior app exists: disabling the Pages deployment stops delivery while leaving downloaded files and browser working copies intact. Do not delete browser documents as rollback. File schema v1 must remain compatible or be rejected explicitly by subsequent releases.
+After an authorized deployment, verify the SHA in LocalDesign/release.json.
+Check blank drawing, inspector edits, skill retrieval and actual tool
+discovery/edit/export in a WebMCP-capable browser. Confirm that direct links
+restore their full URL and hashed assets load. Keep browser storage intact
+during recovery; files and working copies do not sync between origins.

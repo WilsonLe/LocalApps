@@ -1,10 +1,7 @@
 import type { ReactNode, RefObject } from 'react';
-import { Menu } from '@base-ui/react/menu';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
 import { Ellipsis } from 'lucide-react';
 import { Button } from '../components/ui/button';
-
-export const assetMenuItemClass =
-  'flex min-h-9 cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm outline-none select-none data-highlighted:bg-accent data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0';
 
 export function AssetMenu({
   name,
@@ -37,10 +34,7 @@ export function AssetMenu({
           collisionPadding={8}
           className="z-50 outline-none"
         >
-          <Menu.Popup
-            aria-label={`Actions for ${name}`}
-            className="max-h-(--available-height) w-52 overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none"
-          >
+          <Menu.Popup aria-label={`Actions for ${name}`} className="w-52">
             {children}
           </Menu.Popup>
         </Menu.Positioner>

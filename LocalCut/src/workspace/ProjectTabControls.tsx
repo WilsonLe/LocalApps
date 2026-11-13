@@ -2,7 +2,7 @@ import { Button } from '../components/ui/button';
 import { Film, PanelsTopLeft } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 const Tooltip = lazy(() =>
-  import('../components/ui/tooltip').then(({ Tooltip }) => ({
+  import('@localapps/ui/tooltip').then(({ Tooltip }) => ({
     default: Tooltip,
   })),
 );

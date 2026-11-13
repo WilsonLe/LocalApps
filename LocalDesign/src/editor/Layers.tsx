@@ -1,7 +1,8 @@
+import { Label } from "@localapps/ui/label";
 import { WindowedList } from "./WindowedList";
 import { indexNodes } from "../core/tree";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import { Input } from "@localapps/ui/input";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -249,7 +250,7 @@ export const Layers = memo(function Layers({
         <h2>Layers</h2>
         <span>{doc.nodes.filter((n) => n.pageId === pageId).length}</span>
       </div>
-      <label className="layer-search">
+      <Label className="layer-search">
         <Search size={13} />
         <Input
           aria-label="Search layers"
@@ -258,7 +259,7 @@ export const Layers = memo(function Layers({
           onChange={(e) => setQuery(e.target.value)}
         />
         <kbd>⌕</kbd>
-      </label>
+      </Label>
       {rows.length ? (
         <WindowedList
           key={`${doc.id}:${pageId}:${query}`}

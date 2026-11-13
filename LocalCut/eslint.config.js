@@ -49,7 +49,8 @@ export default ts.config(
         {
           patterns: [
             {
-              regex: '(^|/)(workspace|components)(/|$)',
+              regex:
+                '(^|/)(workspace|components|packages/ui)(/|$)|^@localapps/ui(/|$)',
               message: 'Runtime modules must not depend on workspace UI.',
             },
           ],
@@ -78,7 +79,7 @@ export default ts.config(
             { group: ['react*', 'idb', 'mediabunny', '@huggingface/*'] },
             {
               regex:
-                '(^|/)(storage|media|services|workers|editor|ai|workspace|components)(/|$)',
+                '(^|/)(storage|media|services|workers|editor|ai|workspace|components|packages/ui)(/|$)|^@localapps/ui(/|$)',
               message:
                 'The editing core must not depend on browser or engine layers, including through aliases.',
             },

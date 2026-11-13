@@ -1,3 +1,4 @@
+import { Label } from '@localapps/ui/label';
 import { useEffect, useRef } from 'react';
 import { Moon, Monitor, Sun, Shuffle, RotateCcw, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -47,7 +48,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
   ) {
     return (
       <div className="appearance-field" key={key}>
-        <label htmlFor={`appearance-${key}`}>{labels[key]}</label>
+        <Label htmlFor={`appearance-${key}`}>{labels[key]}</Label>
         <SettingsSelect
           id={`appearance-${key}`}
           label={labels[key]}

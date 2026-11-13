@@ -1,3 +1,4 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
 import { onDemandDialog } from './on-demand-dialog';
 import {
   Suspense,
@@ -36,7 +37,8 @@ export function NotificationControl() {
   }, []);
   return (
     <>
-      <button
+      <InteractionButton
+        bare
         ref={trigger}
         id="workspace-notifications-trigger"
         type="button"
@@ -57,7 +59,7 @@ export function NotificationControl() {
             aria-hidden="true"
           />
         )}
-      </button>
+      </InteractionButton>
       {open && (
         <Suspense fallback={null}>
           <NotificationLogDialog

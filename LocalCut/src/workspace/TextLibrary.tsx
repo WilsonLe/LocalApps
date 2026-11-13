@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { SettingsSelect } from './SettingsSelect';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Textarea } from '../components/ui/textarea';
+import { Input } from '@localapps/ui/input';
+import { Textarea } from '@localapps/ui/textarea';
 import { ensureTextFont } from '../media/fonts';
-import { Label } from '../components/ui/label';
-import { CollapsibleDisclosure } from '../components/ui/collapsible';
+import { Label } from '@localapps/ui/label';
+import { CollapsibleDisclosure } from '@localapps/ui/collapsible';
 import {
   TEXT_FONTS,
   TEXT_TEMPLATES,
@@ -24,7 +24,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
   ComboboxValue,
-} from '../components/ui/combobox';
+} from '@localapps/ui/combobox';
 
 export function TextSample({
   style,

@@ -1,5 +1,5 @@
-import { toast as sonner } from 'sonner';
-import type { ExternalToast } from 'sonner';
+import { toast as sonner } from '@localapps/ui/sonner';
+import type { ExternalToast } from '@localapps/ui/sonner';
 import type { ErrorReport } from './error-toast';
 import { NotificationHistory } from './notification-history';
 import type { NotificationType } from './notification-history';

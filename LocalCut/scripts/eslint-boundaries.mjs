@@ -17,7 +17,9 @@ export const dynamicUiBoundary = {
             : node.source.value;
         if (
           typeof source === 'string' &&
-          /(^|\/)(workspace|components)(\/|$)/.test(source)
+          /(^|\/)(workspace|components|packages\/ui)(\/|$)|^@localapps\/ui(\/|$)/.test(
+            source,
+          )
         )
           context.report({ node, messageId: 'ui' });
       },

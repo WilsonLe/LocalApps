@@ -1,3 +1,5 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
+import { Label } from '@localapps/ui/label';
 import { PanelHeader } from './PanelHeader';
 import {
   useEffect,
@@ -20,9 +22,9 @@ import {
 } from 'lucide-react';
 import { AssetClipsDialog } from './AssetClipsDialog';
 import type { Asset, Editor } from '../editor';
-import { Menu } from '@base-ui/react/menu';
-import { AssetMenu, assetMenuItemClass } from './AssetMenu';
-import { Input } from '../components/ui/input';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
+import { AssetMenu } from './AssetMenu';
+import { Input } from '@localapps/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -30,11 +32,11 @@ import {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 import { Button } from '../components/ui/button';
-import { Empty, EmptyContent } from '../components/ui/empty';
-import { Tooltip } from '../components/ui/tooltip';
+import { Empty, EmptyContent } from '@localapps/ui/empty';
+import { Tooltip } from '@localapps/ui/tooltip';
 import { MEDIA_DRAG_EVENT, formatTime } from './helpers';
 import { interfaceScale } from './appearance';
 import { resolveShortcut } from './shortcuts';
@@ -459,7 +461,7 @@ export default function MediaLibrary({
         </PanelHeader>
         {editor && !readOnly && <FolderBreadcrumbs state={folders} />}
       </div>
-      <input
+      <Input
         ref={folderInput}
         type="file"
         hidden
@@ -471,7 +473,7 @@ export default function MediaLibrary({
           void onImportFiles(files, folders.parentId);
         }}
       />
-      <input
+      <Input
         ref={libraryInput}
         type="file"
         hidden
@@ -651,7 +653,6 @@ function MediaAssetCard({
   const actions = libraryActions ?? (
     <>
       <Menu.Item
-        className={assetMenuItemClass}
         disabled={blocked || saving}
         onClick={() => {
           setOriginal(asset);
@@ -665,7 +666,6 @@ function MediaAssetCard({
       </Menu.Item>
       {asset.status === 'missing' && (
         <Menu.Item
-          className={assetMenuItemClass}
           disabled={blocked || saving}
           onClick={() => onRelink(asset.id)}
         >
@@ -674,7 +674,7 @@ function MediaAssetCard({
         </Menu.Item>
       )}
       <Menu.Item
-        className={`${assetMenuItemClass} text-destructive`}
+        className="text-destructive data-highlighted:text-destructive"
         disabled={blocked || saving}
         onClick={() => {
           setFailure('');
@@ -756,10 +756,7 @@ function MediaAssetCard({
       </Tooltip>
       <AssetMenu name={asset.name}>
         {actions}
-        <Menu.Item
-          className={assetMenuItemClass}
-          onClick={() => setClipsAsset(asset)}
-        >
+        <Menu.Item onClick={() => setClipsAsset(asset)}>
           <FileText aria-hidden="true" />
           Clips
         </Menu.Item>
@@ -809,7 +806,7 @@ function MediaAssetCard({
             }}
           >
             {dialog === 'rename' && (
-              <label className="grid gap-2">
+              <Label className="grid gap-2">
                 Asset name
                 <Input
                   autoFocus
@@ -817,7 +814,7 @@ function MediaAssetCard({
                   disabled={saving || blocked}
                   onChange={(event) => setName(event.target.value)}
                 />
-              </label>
+              </Label>
             )}
             {failure && (
               <p role="alert" className="text-destructive">
@@ -921,7 +918,8 @@ function AssetPreview({
       : dragPosition.y - height - gap);
   return (
     <>
-      <button
+      <InteractionButton
+        bare
         type="button"
         className="media-asset-preview"
         aria-label={`Asset details for ${asset.name}`}
@@ -929,7 +927,7 @@ function AssetPreview({
       >
         {symbol}
         <span className="media-asset-name">{asset.name}</span>
-      </button>
+      </InteractionButton>
       {dragPosition &&
         createPortal(
           <div

@@ -1,6 +1,6 @@
 # Development loop
 
-Read [CONTRIBUTING.md](../CONTRIBUTING.md), the [agent guide](../AGENTS.md) and [current preferences](current-preferences.md). Reuse the task’s isolated feature worktree and tracking issue. Node 24, pnpm 11.25.0 and installed stable Google Chrome are required. Keep dependencies exact and install with `pnpm install --frozen-lockfile`. Product agent AI was removed on 11 November 2026; no editor feature requires an assistant path.
+Read [CONTRIBUTING.md](../CONTRIBUTING.md), the [agent guide](../AGENTS.md) and [current preferences](current-preferences.md). Reuse the task’s isolated feature worktree and tracking issue. Node 24, pnpm 11.25.0 and installed stable Google Chrome are required. Keep dependencies exact and install from the LocalApps root with `pnpm install --frozen-lockfile`. Product agent AI was removed on 11 November 2026; no editor feature requires an assistant path.
 
 ## Commands
 

@@ -1,6 +1,7 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
 import { ListTree } from 'lucide-react';
 import { notifyError } from './notifications';
-import type { ExternalToast } from 'sonner';
+import type { ExternalToast } from '@localapps/ui/sonner';
 import {
   errorDiagnostic,
   redactDiagnosticText,
@@ -88,7 +89,8 @@ export function showErrorToast(
     {
       ...options,
       action: (
-        <button
+        <InteractionButton
+          bare
           type="button"
           aria-label="View stack trace"
           title="View stack trace"
@@ -99,7 +101,7 @@ export function showErrorToast(
           }}
         >
           <ListTree className="size-4" />
-        </button>
+        </InteractionButton>
       ),
     },
     report,

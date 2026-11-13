@@ -8,9 +8,9 @@ import {
 import type { Editor, Job } from '../editor';
 import type { ScreenRecording } from '../services/screen-recording';
 import { Button } from '../components/ui/button';
-import { Checkbox } from '../components/ui/checkbox';
-import { Label } from '../components/ui/label';
-import { Tooltip } from '../components/ui/tooltip';
+import { Checkbox } from '@localapps/ui/checkbox';
+import { Label } from '@localapps/ui/label';
+import { Tooltip } from '@localapps/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 type Phase =
   'idle' | 'choosing' | 'recording' | 'stopping' | 'ready' | 'adding';

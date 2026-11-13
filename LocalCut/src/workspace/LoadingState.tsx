@@ -1,5 +1,7 @@
+import { Skeleton } from '@localapps/ui/skeleton';
+
 function Placeholder({ className = '' }: { className?: string }) {
-  return <div className={`loading-placeholder ${className}`} />;
+  return <Skeleton className={`loading-placeholder ${className}`} />;
 }
 
 export function StoryboardSkeleton() {

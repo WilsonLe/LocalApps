@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 export interface ImportProgress {
   name: string;

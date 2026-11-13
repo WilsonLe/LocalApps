@@ -59,8 +59,22 @@ export async function inputHash(build) {
         /^tsconfig(?:\.(?:types|worker))?\.json$/.test(name),
     )
     .map((name) => join(root, name));
+  const workspace = dirname(root);
+  const ui = join(workspace, 'packages', 'ui');
+  const workspaceFiles = (await readdir(workspace))
+    .filter((name) =>
+      ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].includes(name),
+    )
+    .map((name) => join(workspace, name));
+
   const files = [
     ...rootFiles,
+    ...workspaceFiles,
+    join(ui, 'package.json'),
+    ...(await filesIn(join(ui, 'src'))).filter(
+      (file) => basename(file) !== 'AGENTS.md',
+    ),
+    ...(await filesIn(join(root, 'patches'))),
     // Agent instructions are development metadata, never production inputs.
     ...(await filesIn(join(root, 'src'))).filter(
       (file) => basename(file) !== 'AGENTS.md',

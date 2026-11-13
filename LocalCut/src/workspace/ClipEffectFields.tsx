@@ -1,12 +1,13 @@
+import { Checkbox } from '@localapps/ui/checkbox';
 import { useEffect, useRef, useState } from 'react';
 import { COLOR_PRESETS, BLEND_MODES, parseCube } from '../core/effects';
 import type { Mask } from '../core/effects';
 import type { Clip, EditOperation, Job } from '../editor';
 import type { MaskTrackingResult } from '../media/mask-tracking';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { TabsContent } from '../components/ui/tabs';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
+import { TabsContent } from '@localapps/ui/tabs';
 import { SettingsSelect } from './SettingsSelect';
 type Patch = Extract<EditOperation, { type: 'updateClip' }>['patch'];
 function NumberField({
@@ -191,14 +192,11 @@ export function ClipEffectFields({
         {audio && (
           <TabsContent value="audio" data-properties-tab="audio" keepMounted>
             <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-              <Label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={value.muted}
-                  onChange={(e) => onChange({ muted: e.target.checked })}
-                />
-                Mute clip
-              </Label>
+              <Checkbox
+                label="Mute clip"
+                checked={value.muted}
+                onCheckedChange={(checked) => onChange({ muted: checked })}
+              />
               {number(
                 'balance',
                 'Balance (left −1 / right 1)',
@@ -352,18 +350,15 @@ export function ClipEffectFields({
                       (feather) =>
                         onChange({ mask: { ...value.mask!, feather } }),
                     )}
-                    <Label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={value.mask.invert}
-                        onChange={(e) =>
-                          onChange({
-                            mask: { ...value.mask!, invert: e.target.checked },
-                          })
-                        }
-                      />
-                      Invert mask
-                    </Label>
+                    <Checkbox
+                      label="Invert mask"
+                      checked={value.mask.invert}
+                      onCheckedChange={(checked) =>
+                        onChange({
+                          mask: { ...value.mask!, invert: checked },
+                        })
+                      }
+                    />
                     {value.mask.points?.length && (
                       <>
                         <span className="text-sm">
@@ -545,25 +540,22 @@ export function ClipEffectFields({
               keepMounted
             >
               <div className="grid gap-3">
-                <Label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!value.chromaKey}
-                    onChange={(e) =>
-                      onChange({
-                        chromaKey: e.target.checked
-                          ? {
-                              color: '#00ff00',
-                              tolerance: 0.1,
-                              softness: 0.1,
-                              spill: 0.5,
-                            }
-                          : null,
-                      })
-                    }
-                  />
-                  Enable chroma key
-                </Label>
+                <Checkbox
+                  label="Enable chroma key"
+                  checked={!!value.chromaKey}
+                  onCheckedChange={(checked) =>
+                    onChange({
+                      chromaKey: checked
+                        ? {
+                            color: '#00ff00',
+                            tolerance: 0.1,
+                            softness: 0.1,
+                            spill: 0.5,
+                          }
+                        : null,
+                    })
+                  }
+                />
                 {value.chromaKey && (
                   <>
                     <Label htmlFor="effect-key-color">Key color</Label>

@@ -1,3 +1,4 @@
+import { Label } from '@localapps/ui/label';
 import { useAppearance } from './appearance';
 import type { Ref } from 'react';
 import './storyboard-asset-path';
@@ -22,17 +23,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from '../components/ui/select';
-import { Input } from '../components/ui/input';
+} from '@localapps/ui/select';
+import { Input } from '@localapps/ui/input';
 import { Button } from '../components/ui/button';
-import { Tooltip } from '../components/ui/tooltip';
+import { Tooltip } from '@localapps/ui/tooltip';
 import { downloadFile } from './helpers';
 import type { StoryboardExportOptions, Job } from '../editor';
 
@@ -359,7 +360,7 @@ export function Storyboard({
         }
       }}
     >
-      <input
+      <Input
         ref={uploadInput}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
@@ -399,7 +400,7 @@ export function Storyboard({
             </Select>
             {imageSources.find((a) => a.id === imageSource)?.kind ===
               'video' && (
-              <label>
+              <Label>
                 Video time (seconds)
                 <Input
                   type="number"
@@ -408,7 +409,7 @@ export function Storyboard({
                   value={imageTime}
                   onChange={(event) => setImageTime(event.target.value)}
                 />
-              </label>
+              </Label>
             )}
           </div>
           <DialogFooter>

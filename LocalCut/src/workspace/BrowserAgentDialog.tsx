@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { browserAgentConnection, connectionLabel } from './webmcp/connection';
 
 export default function BrowserAgentDialog({ onClose }: { onClose(): void }) {

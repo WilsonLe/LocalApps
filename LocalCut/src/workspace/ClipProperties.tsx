@@ -11,17 +11,12 @@ import type { TextStyleInput } from '../core/text-library';
 import { SpeedRampEditor } from './SpeedRampEditor';
 import { KeyframeEditor } from './KeyframeEditor';
 import { TextStyleFields } from './TextLibrary';
-import { Textarea } from '../components/ui/textarea';
+import { Textarea } from '@localapps/ui/textarea';
 import { Button } from '../components/ui/button';
-import { DialogFooter } from '../components/ui/dialog';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '../components/ui/tabs';
+import { DialogFooter } from '@localapps/ui/dialog';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@localapps/ui/tabs';
 import { SettingsSelect } from './SettingsSelect';
 
 export default function ClipProperties({

@@ -1,9 +1,10 @@
+import { Field } from '@localapps/ui/field';
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { DialogFooter } from '../components/ui/dialog';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { DialogFooter } from '@localapps/ui/dialog';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
 import { SettingsSelect } from './SettingsSelect';
 import {
   ASPECT_RATIOS,
@@ -51,7 +52,7 @@ export function NewProjectForm({
         });
       }}
     >
-      <div className="new-project-field">
+      <Field className="new-project-field">
         <Label htmlFor="project-name">Project name</Label>
         <Input
           id="project-name"
@@ -62,8 +63,8 @@ export function NewProjectForm({
           autoFocus
           disabled={busy}
         />
-      </div>
-      <div className="new-project-field">
+      </Field>
+      <Field className="new-project-field">
         <Label htmlFor="project-aspect-ratio">Aspect ratio</Label>
         <SettingsSelect
           id="project-aspect-ratio"
@@ -87,8 +88,8 @@ export function NewProjectForm({
             if (next) setDimensions(next);
           }}
         />
-      </div>
-      <div className="new-project-field">
+      </Field>
+      <Field className="new-project-field">
         <Label htmlFor="project-resolution">Resolution</Label>
         <SettingsSelect
           id="project-resolution"
@@ -109,7 +110,7 @@ export function NewProjectForm({
             if (next) setDimensions(next);
           }}
         />
-      </div>
+      </Field>
       <div className="grid grid-cols-2 gap-4">
         {[
           {
@@ -144,7 +145,7 @@ export function NewProjectForm({
           </div>
         ))}
       </div>
-      <div className="new-project-field">
+      <Field className="new-project-field">
         <Label htmlFor="project-frame-rate">Frame rate (fps)</Label>
         <SettingsSelect
           id="project-frame-rate"
@@ -157,7 +158,7 @@ export function NewProjectForm({
           options={FRAME_RATES}
           onChange={setFrameRate}
         />
-      </div>
+      </Field>
       <DialogFooter>
         <Button disabled={busy} type="submit">
           {busy && <LoaderCircle className="animate-spin" />}Create project

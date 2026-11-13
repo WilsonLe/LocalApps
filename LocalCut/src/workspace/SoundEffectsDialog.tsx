@@ -1,3 +1,5 @@
+import { Slider } from '@localapps/ui/slider';
+import { Label } from '@localapps/ui/label';
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
@@ -15,14 +17,14 @@ import type {
   SoundCategory,
 } from '../core/sound-library';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Input } from '@localapps/ui/input';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { SettingsSelect } from './SettingsSelect';
 import { showErrorToast } from './error-toast';
 import { loadSoundCatalog, loadSoundFile } from './sound-library';
@@ -200,24 +202,23 @@ export default function SoundEffectsDialog({
               ? `${catalog.sounds.length} sounds · CC0 · No credit required`
               : 'CC0 sound library'}
           </span>
-          <label className="flex items-center gap-2">
+          <Label className="flex items-center gap-2">
             <Volume2 className="size-3.5" aria-hidden="true" />
             <span className="sr-only">Preview volume</span>
-            <input
-              type="range"
+            <Slider
+              label="Preview volume"
               min={0}
               max={1}
               step={0.05}
               value={volume}
-              className="w-24 accent-primary"
-              onChange={(event) => {
-                const next = Number(event.target.value);
+              className="max-w-24"
+              onValueChange={(next) => {
                 previewVolume.current = next;
                 setVolume(next);
                 if (audio.current) audio.current.volume = next;
               }}
             />
-          </label>
+          </Label>
         </div>
         <audio
           ref={audio}

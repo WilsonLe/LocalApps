@@ -6,7 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import type { ErrorReport } from './error-toast';
 
 export default function ErrorDetailsDialog({

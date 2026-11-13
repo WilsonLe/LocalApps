@@ -1,3 +1,4 @@
+import { Empty, EmptyTitle } from '@localapps/ui/empty';
 import { onDemandDialog } from './on-demand-dialog';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
@@ -30,7 +31,7 @@ const ProjectDetailsDialog = onDemandDialog(
 import type { ProjectSummary } from './project-catalog-cache';
 import { ProjectListSkeleton } from './LoadingState';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Input } from '@localapps/ui/input';
 import { formatTime } from './helpers';
 
 interface Props {
@@ -267,15 +268,15 @@ export default function ProjectBrowser({
               })}
             </ul>
           ) : (
-            <div className="project-browser-empty">
+            <Empty className="project-browser-empty">
               <Film aria-hidden="true" />
-              <h2>
+              <EmptyTitle as="h2">
                 {visible.length
                   ? 'No matching projects'
                   : archived
                     ? 'No archived projects'
                     : 'No saved projects yet'}
-              </h2>
+              </EmptyTitle>
               {visible.length ? (
                 <Button variant="outline" onClick={() => setQuery('')}>
                   Clear search
@@ -289,7 +290,7 @@ export default function ProjectBrowser({
                   View active projects
                 </Button>
               )}
-            </div>
+            </Empty>
           ))}
       </div>
       {editing && (

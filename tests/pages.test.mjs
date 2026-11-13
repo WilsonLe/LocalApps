@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { server } from "../scripts/serve-pages.mjs";
 
 const output = new URL("../dist/", import.meta.url);
-const { base, apps } = JSON.parse(
+const { base, apps, designLibrary } = JSON.parse(
   await readFile(new URL("release.json", output), "utf8"),
 );
 const fallback = await readFile(new URL("route-fallback.js", output), "utf8");
@@ -115,4 +115,37 @@ test("portal links, app base URLs, licenses and packaged fallbacks are complete"
       await readFile(new URL(url.pathname.slice(base.length), output));
     }
   }
+});
+
+test("the portal links to the built design library at the same hosting base", async () => {
+  const portal = await readFile(new URL("index.html", output), "utf8");
+  assert.ok(portal.includes('href="./DesignLibrary/"'));
+  assert.equal(designLibrary, base + "DesignLibrary/");
+  const html = await readFile(
+    new URL("DesignLibrary/index.html", output),
+    "utf8",
+  );
+  const assets = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(assets.some((asset) => asset.endsWith(".js")));
+  assert.ok(assets.some((asset) => asset.endsWith(".css")));
+  for (const asset of assets) {
+    assert.ok(
+      asset.startsWith(designLibrary),
+      "Library asset escaped its base: " + asset,
+    );
+    await readFile(new URL(asset.slice(base.length), output));
+  }
+  for (const path of [
+    designLibrary,
+    ...Object.values(apps).map((app) => app.path),
+  ])
+    assert.match(
+      await readFile(
+        new URL(path.slice(base.length) + "SHADCN_LICENSE.txt", output),
+        "utf8",
+      ),
+      /Copyright \(c\) 2023 shadcn/,
+    );
 });

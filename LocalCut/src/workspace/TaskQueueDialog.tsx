@@ -7,17 +7,17 @@ import {
   TableRow,
   TableHead,
   TableCell,
-} from '../components/ui/table';
+} from '@localapps/ui/table';
 import { Button } from '../components/ui/button';
-import { Tooltip } from '../components/ui/tooltip';
-import { AccordionDisclosure } from '../components/ui/accordion';
+import { Tooltip } from '@localapps/ui/tooltip';
+import { AccordionDisclosure } from '@localapps/ui/accordion';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { HistoryTable, useHistoryPage } from './HistoryTable';
 import { downloadFile } from './helpers';
 function SavedTaskResult({

@@ -1,3 +1,4 @@
+import { Input } from '@localapps/ui/input';
 import type { WorkspaceCommand } from './commands';
 import { useMediaImport } from './useMediaImport';
 import { useWorkspaceWebMCP } from './useWorkspaceWebMCP';
@@ -44,7 +45,7 @@ import type {
   ProjectVersionInfo,
 } from '../editor';
 import { Button } from '../components/ui/button';
-import { Toaster } from '../components/ui/sonner';
+import { Toaster } from '@localapps/ui/sonner';
 import {
   showErrorToast,
   registerErrorSession,
@@ -76,7 +77,7 @@ const EditorPanels = lazy(() =>
 );
 import type { PreviewControls } from './Preview';
 const Tooltip = lazy(() =>
-  import('../components/ui/tooltip').then(({ Tooltip }) => ({
+  import('@localapps/ui/tooltip').then(({ Tooltip }) => ({
     default: Tooltip,
   })),
 );
@@ -1926,7 +1927,7 @@ export function Workspace() {
           />
         </Suspense>
       )}
-      <input
+      <Input
         ref={fileInput}
         tabIndex={-1}
         className="sr-only"
@@ -1957,7 +1958,7 @@ export function Workspace() {
           if (files.length) void importMedia(files);
         }}
       />
-      <input
+      <Input
         ref={backupInput}
         tabIndex={-1}
         className="sr-only"

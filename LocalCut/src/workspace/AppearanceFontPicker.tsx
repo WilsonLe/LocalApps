@@ -1,3 +1,4 @@
+import { Label } from '@localapps/ui/label';
 import { useState } from 'react';
 import { matchesTextLabels } from '../core/text-library';
 import { appearanceFontChoices } from './appearance-fonts';
@@ -11,7 +12,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
   ComboboxValue,
-} from '../components/ui/combobox';
+} from '@localapps/ui/combobox';
 
 const inherited = {
   id: 'inherit' as const,
@@ -38,7 +39,7 @@ export function AppearanceFontPicker({
   const matches = choices.filter((font) => matchesTextLabels(font, query));
   return (
     <div className="appearance-field">
-      <label id={`appearance-${label.toLowerCase()}-label`}>{label}</label>
+      <Label id={`appearance-${label.toLowerCase()}-label`}>{label}</Label>
       <Combobox<Choice>
         items={matches.slice(0, 60)}
         open={open}

@@ -14,8 +14,17 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 test('verified build cache reuses test/docs edits and rejects source/output/environment drift', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'localcut-build-state-'));
+  const workspace = await mkdtemp(join(tmpdir(), 'localcut-build-state-'));
+  const root = join(workspace, 'LocalCut');
+  const ui = join(workspace, 'packages', 'ui');
+  const sharedButton = join(ui, 'src', 'button.tsx');
+  const lockfile = join(workspace, 'pnpm-lock.yaml');
   try {
+    await mkdir(root);
+    await mkdir(join(ui, 'src'), { recursive: true });
+    await writeFile(join(ui, 'package.json'), '{"name":"@localapps/ui"}');
+    await writeFile(sharedButton, 'shared production');
+    await writeFile(lockfile, 'lockfile');
     for (const dir of ['scripts', 'src', 'public', 'dist', 'tests', 'docs'])
       await mkdir(join(root, dir));
     for (const name of [
@@ -59,6 +68,21 @@ test('verified build cache reuses test/docs edits and rejects source/output/envi
     commit();
     await recordBuild(build, await inputHash(build));
     assert.equal((await buildStatus(build)).current, true);
+    await writeFile(sharedButton, 'new shared component');
+    assert.equal(
+      (await buildStatus(build)).current,
+      false,
+      'shared UI changes invalidate reuse',
+    );
+    await writeFile(sharedButton, 'shared production');
+    assert.equal((await buildStatus(build)).current, true);
+    await writeFile(lockfile, 'new lockfile');
+    assert.equal(
+      (await buildStatus(build)).current,
+      false,
+      'root lockfile changes invalidate reuse',
+    );
+    await writeFile(lockfile, 'lockfile');
     await writeFile(join(root, 'tests', 'test.ts'), 'new test');
     await writeFile(join(root, 'docs', 'readme.md'), 'new docs');
     await writeFile(join(root, 'src', 'AGENTS.md'), 'instructions');
@@ -103,6 +127,6 @@ test('verified build cache reuses test/docs edits and rejects source/output/envi
     await rm(join(root, 'dist', 'index.html'));
     assert.equal((await buildStatus(build)).current, false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(workspace, { recursive: true, force: true });
   }
 });

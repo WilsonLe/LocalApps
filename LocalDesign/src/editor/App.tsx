@@ -1,3 +1,4 @@
+import { Label } from "@localapps/ui/label";
 import { BrandMark } from "../components/BrandMark";
 import {
   Dialog,
@@ -8,8 +9,8 @@ import {
 import { ThemeToggle, applyTheme, readTheme } from "./ThemeToggle";
 import { surfaceTextFill } from "./surface";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { NativeSelect } from "../components/ui/native-select";
+import { Input } from "@localapps/ui/input";
+import { NativeSelect } from "@localapps/ui/native-select";
 import {
   useCallback,
   useEffect,
@@ -1011,7 +1012,7 @@ export function App() {
             </Button>
           </div>
           <div className="skill-browser">
-            <label>
+            <Label>
               Bundled design guides
               <NativeSelect
                 value={skill}
@@ -1023,7 +1024,7 @@ export function App() {
                   </option>
                 ))}
               </NativeSelect>
-            </label>
+            </Label>
             <pre>{getSkill(skill).instructions}</pre>
           </div>
         </Modal>

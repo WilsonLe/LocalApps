@@ -1,7 +1,9 @@
+import { FieldLabel } from "@localapps/ui/field";
+import { Checkbox } from "@localapps/ui/checkbox";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Textarea } from "../components/ui/textarea";
-import { NativeSelect } from "../components/ui/native-select";
+import { Input } from "@localapps/ui/input";
+import { Textarea } from "@localapps/ui/textarea";
+import { NativeSelect } from "@localapps/ui/native-select";
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter,
@@ -41,7 +43,7 @@ function Field({
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   return (
-    <label className="field">
+    <FieldLabel layout="stacked" className="field">
       <span>{label}</span>
       <Input
         type={type}
@@ -66,7 +68,7 @@ function Field({
           }
         }}
       />
-    </label>
+    </FieldLabel>
   );
 }
 function TextEditor({
@@ -79,7 +81,7 @@ function TextEditor({
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
-    <label className="field">
+    <FieldLabel layout="stacked" className="field">
       <span>Text content</span>
       <Textarea
         aria-label="Text content"
@@ -90,7 +92,7 @@ function TextEditor({
         }}
         rows={3}
       />
-    </label>
+    </FieldLabel>
   );
 }
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -227,22 +229,16 @@ export const Inspector = memo(function Inspector({
               onChange={(name) => patch({ name })}
             />
             <div className="checks">
-              <label>
-                <Input
-                  type="checkbox"
-                  checked={n.locked}
-                  onChange={(e) => patch({ locked: e.target.checked })}
-                />
-                Locked
-              </label>
-              <label>
-                <Input
-                  type="checkbox"
-                  checked={!n.hidden}
-                  onChange={(e) => patch({ hidden: !e.target.checked })}
-                />
-                Visible
-              </label>
+              <Checkbox
+                label="Locked"
+                checked={n.locked}
+                onCheckedChange={(checked) => patch({ locked: checked })}
+              />
+              <Checkbox
+                label="Visible"
+                checked={!n.hidden}
+                onCheckedChange={(checked) => patch({ hidden: !checked })}
+              />
             </div>
           </Section>
           <Section title="Layout">
@@ -254,7 +250,7 @@ export const Inspector = memo(function Inspector({
               {numeric("rotation", n.rotation, "Rotation")}
               {numeric("radius", n.radius, "Radius", 1, 0)}
             </div>
-            <label className="field">
+            <FieldLabel layout="stacked" className="field">
               <span>Parent</span>
               <NativeSelect
                 value={n.parentId ?? ""}
@@ -282,7 +278,7 @@ export const Inspector = memo(function Inspector({
                     </option>
                   ))}
               </NativeSelect>
-            </label>
+            </FieldLabel>
             <div className="icon-row" aria-label="Align layers">
               {(
                 [
@@ -400,7 +396,7 @@ export const Inspector = memo(function Inspector({
                 )}
                 {numeric("letterSpacing", n.letterSpacing, "Tracking", 0.1)}
               </div>
-              <label className="field">
+              <FieldLabel layout="stacked" className="field">
                 <span>Text align</span>
                 <NativeSelect
                   value={n.textAlign}
@@ -414,7 +410,7 @@ export const Inspector = memo(function Inspector({
                   <option>center</option>
                   <option>right</option>
                 </NativeSelect>
-              </label>
+              </FieldLabel>
               {measureText(n, doc).overflow && (
                 <p className="warning">
                   Text overflows this box. Increase its height or adjust type
@@ -437,7 +433,7 @@ export const Inspector = memo(function Inspector({
           )}
           {n.type === "frame" && (
             <Section title="Auto layout">
-              <label className="field">
+              <FieldLabel layout="stacked" className="field">
                 <span>Direction</span>
                 <NativeSelect
                   value={n.layout.direction}
@@ -455,7 +451,7 @@ export const Inspector = memo(function Inspector({
                   <option value="horizontal">Horizontal</option>
                   <option value="vertical">Vertical</option>
                 </NativeSelect>
-              </label>
+              </FieldLabel>
               {n.layout.direction !== "none" && (
                 <>
                   <div className="property-grid">
@@ -476,7 +472,7 @@ export const Inspector = memo(function Inspector({
                       }
                     />
                   </div>
-                  <label className="field">
+                  <FieldLabel layout="stacked" className="field">
                     <span>Alignment</span>
                     <NativeSelect
                       value={n.layout.align}
@@ -494,17 +490,15 @@ export const Inspector = memo(function Inspector({
                       <option>center</option>
                       <option>end</option>
                     </NativeSelect>
-                  </label>
+                  </FieldLabel>
                 </>
               )}
-              <label className="check-line">
-                <Input
-                  type="checkbox"
-                  checked={n.clip}
-                  onChange={(e) => patch({ clip: e.target.checked })}
-                />
-                Clip content
-              </label>
+              <Checkbox
+                label="Clip content"
+                labelClassName="check-line text-[10px] gap-1.5"
+                checked={n.clip}
+                onCheckedChange={(checked) => patch({ clip: checked })}
+              />
             </Section>
           )}
           <Section title="Arrange">

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { TouchTooltip, getTouchTooltipContent } from '../components/ui/tooltip';
+import { TouchTooltip, getTouchTooltipContent } from '@localapps/ui/tooltip';
 
 interface Help {
   anchor: HTMLElement;

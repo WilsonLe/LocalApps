@@ -6,7 +6,7 @@ import {
   DialogFocusContext,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 export interface LoadingDialogProps {
   open?: boolean;

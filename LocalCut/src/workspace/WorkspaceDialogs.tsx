@@ -20,8 +20,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
-import { Label } from '../components/ui/label';
+} from '@localapps/ui/dialog';
+import { Label } from '@localapps/ui/label';
 import { SettingsSelect } from './SettingsSelect';
 import { clipName, downloadFile, formatTime } from './helpers';
 import { SHORTCUT_GROUPS } from './shortcut-help';

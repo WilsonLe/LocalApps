@@ -12,7 +12,7 @@ import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-} from '../components/ui/resizable';
+} from '@localapps/ui/resizable';
 import {
   saveWorkspacePreferences,
   useWorkspacePreferences,

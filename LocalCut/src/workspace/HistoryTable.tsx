@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Table } from '../components/ui/table';
+import { Table } from '@localapps/ui/table';
 import { Button } from '../components/ui/button';
 import {
   Pagination,
@@ -8,7 +8,7 @@ import {
   PaginationItem,
   PaginationLink,
   PaginationEllipsis,
-} from '../components/ui/pagination';
+} from '@localapps/ui/pagination';
 
 const pageSize = 10;
 export function useHistoryPage(count: number) {

@@ -32,14 +32,12 @@ jobs:
           version: 11.25.0
       - uses: actions/configure-pages@v5
         id: pages
-      - name: Install LocalDesign dependencies
-        run: npm ci --prefix LocalDesign
-      - name: Install LocalCut dependencies
-        run: pnpm --dir LocalCut install --frozen-lockfile
-      - name: Build portal and apps
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build portal, apps and design library
         env:
           LOCALAPPS_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
-        run: npm run build
+        run: pnpm build
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

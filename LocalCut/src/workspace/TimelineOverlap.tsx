@@ -1,5 +1,6 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
 import { useRef, useState, type CSSProperties } from 'react';
-import { ContextMenu } from '@base-ui/react/context-menu';
+import { ContextMenu } from '@localapps/ui/context-menu';
 import { Blend, ChevronRight, Layers2 } from 'lucide-react';
 import {
   TRANSITION_TEMPLATES,
@@ -28,11 +29,6 @@ interface Props {
     scope: TrackOperationScope,
   ) => void;
 }
-
-const itemClass =
-  'flex min-h-9 cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-50';
-const popupClass =
-  'max-h-(--available-height) w-48 max-w-[calc(var(--app-viewport-width)-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none';
 
 export function TimelineOverlap({
   project,
@@ -83,7 +79,7 @@ export function TimelineOverlap({
       }}
     >
       <ContextMenu.Trigger
-        render={<button ref={trigger} type="button" />}
+        render={<InteractionButton bare ref={trigger} type="button" />}
         className="timeline-overlap"
         style={style}
         data-transition={!!transition}
@@ -137,18 +133,15 @@ export function TimelineOverlap({
         >
           <ContextMenu.Popup
             aria-label="Overlap options"
-            className={popupClass}
+            className="w-48"
             finalFocus={trigger}
           >
-            <ContextMenu.Item className={itemClass} onClick={onSelect}>
+            <ContextMenu.Item onClick={onSelect}>
               <Layers2 className="size-4" aria-hidden="true" />
               Select overlapping clips
             </ContextMenu.Item>
             <ContextMenu.SubmenuRoot>
-              <ContextMenu.SubmenuTrigger
-                className={itemClass}
-                disabled={cannotEdit}
-              >
+              <ContextMenu.SubmenuTrigger disabled={cannotEdit}>
                 <Blend className="size-4" aria-hidden="true" />
                 {transition ? 'Change transition' : 'Add transition'}
                 <ChevronRight className="ml-auto size-4" aria-hidden="true" />
@@ -160,12 +153,11 @@ export function TimelineOverlap({
                 >
                   <ContextMenu.Popup
                     aria-label="Transition templates"
-                    className={popupClass}
+                    className="w-48"
                   >
                     {TRANSITION_TEMPLATES.map((template) => (
                       <ContextMenu.Item
                         key={template.id}
-                        className={itemClass}
                         disabled={cannotEdit}
                         onClick={() => applyTemplate(template.id)}
                       >
@@ -178,7 +170,6 @@ export function TimelineOverlap({
             </ContextMenu.SubmenuRoot>
             {transition && (
               <ContextMenu.Item
-                className={itemClass}
                 disabled={cannotEdit}
                 onClick={() => {
                   if (!scope || cannotEdit) return;

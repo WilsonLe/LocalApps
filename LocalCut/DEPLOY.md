@@ -4,15 +4,17 @@ LocalCut serves static files and has no application backend, runtime secrets or 
 
 ## GitHub Pages
 
-The production URL is [https://wilsonle.github.io/LocalCut/](https://wilsonle.github.io/LocalCut/). The default build base is `/LocalCut/`.
+The LocalApps production URL is [LocalCut](https://wilsonle.github.io/LocalApps/LocalCut/).
+The [root Pages workflow](../.github/workflows/pages.yml) publishes the portal,
+both editors and the Design Library from main using the workspace lockfile.
+Feature branches and PRs do not deploy. Use the [root Pages runbook](../README.md#validation-and-github-pages)
+for the deployment target, approved manual dispatch and readback. The imported
+standalone workflow under LocalCut is not executed by this repository.
 
-[The Pages workflow](.github/workflows/pages.yml) builds and deploys every push to `main`, including merged PRs. GitHub Pages must use **GitHub Actions** as its publishing source. Feature branches and PRs do not deploy. The workflow installs Node 24 and pnpm 11.25.0, uses the frozen lockfile, builds the application, uploads only `dist/`, and publishes it with Pages/OIDC permissions scoped to the deployment job.
-
-The user has authorized this automatic release behavior; merging an authorized reviewed change to `main` triggers deployment without a separate dispatch. For an approved manual redeploy, select `main` in **Actions → GitHub Pages deployment → Run workflow** and set `confirm_deploy=true`. Other refs or an unconfirmed dispatch skip packaging/deployment.
-
-Validation runs locally by project preference. Before merging runtime/configuration/dependency changes, complete `pnpm check` and applicable native performance gates from [validation](docs/validation.md). Documentation-only changes use formatting/link/command validation. Hosted check/performance workflows are disabled; Pages packaging is not a substitute for local checks. See [releasing](docs/releasing.md) for candidate identity, review and approval.
-
-For a fork, configure Pages publishing and change the build base if its repository name/path differs. Do not assume the upstream `/LocalCut/` build fits every fork or custom domain.
+Validation runs locally. Before merging runtime/configuration/dependency
+changes, complete pnpm check and applicable native performance gates from
+[validation](docs/validation.md). See [releasing](docs/releasing.md) for
+candidate identity, review and approval.
 
 ## Self-hosting
 
