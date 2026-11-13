@@ -1,0 +1,57 @@
+# Documentation
+
+Choose a starting point for the work you want to do. Current behavior lives in the linked contracts; dated acceptance/review records are evidence for their recorded revisions.
+
+Contributors: start with the [current preference index](current-preferences.md) and [coding rules](../CONTRIBUTING.md#coding-rules) for the area you will change.
+
+## Use LocalCut
+
+| Guide                                           | What it covers                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| [Project overview](../README.md)                | Features, demo and links to detailed guides                          |
+| [Browser support](browser-support.md)           | Chrome/Safari coverage, capture, local data and offline limits       |
+| [Getting started](getting-started.md)           | First edit, exports, versions and portable backups                   |
+| [Privacy and data flows](privacy.md)            | Local storage, remote actions, credentials and deletion boundaries   |
+| [Troubleshooting](troubleshooting.md)           | Storage, codec, model, provider and setup failures                   |
+| [Support](../SUPPORT.md)                        | Safe bug reports, questions and proposals                            |
+| [Storyboard workflows](storyboard-workflows.md) | Diagram authoring, exports, Media reuse and cross-domain recipes     |
+| [Workspace contract](workspace.md)              | Detailed user interaction and state behavior                         |
+| [Sound effects](sound-effects.md)               | Bundled library, source research, rights, provenance and preparation |
+
+## Contribute and integrate
+
+| Guide                                         | What it covers                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| [Contributing](../CONTRIBUTING.md)            | Issue-first changes, setup, validation, PRs and licensing          |
+| [Source setup](setup.md)                      | Prerequisites, installation, local start and next steps            |
+| [Development](development.md)                 | Module ownership, focused checks, build reuse and failure recovery |
+| [Architecture](architecture.md)               | Runtime boundaries and state ownership                             |
+| [Agent skills](skills.md)                     | Portable editing workflows and WebMCP guidance                     |
+| [API](api.md)                                 | Headless editor contracts, commands and lifecycle                  |
+| [Storage](storage.md)                         | IndexedDB/OPFS, recovery, versions and backup compatibility        |
+| [Transcription](transcription.md)             | Agent-provided STT/TTS, saved transcripts and captions             |
+| [Validation](validation.md)                   | Native codec/inference/export requirements and scoped results      |
+| [Playwright journeys](playwright-journeys.md) | Compatible browser journeys and isolation boundaries               |
+| [Agent guide](../AGENTS.md)                   | Root instructions; read the relevant nested module guides too      |
+
+## Maintain and release
+
+| Guide                                                                    | What it covers                                                |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| [Governance](governance.md)                                              | Decisions, maintainers and contributor responsibilities       |
+| [Roadmap](roadmap.md)                                                    | Priorities, non-goals and proposal criteria                   |
+| [Maintainer guide](maintaining.md)                                       | Triage, review, repository readiness and documentation upkeep |
+| [Releasing](releasing.md)                                                | SemVer, short changelog/full diffs, approval and evidence     |
+| [Deployment](../DEPLOY.md)                                               | Pages, self-hosting, live checks and compatible rollback      |
+| [Security](../SECURITY.md)                                               | Private reporting limitations and vulnerability handling      |
+| [Code of Conduct](../CODE_OF_CONDUCT.md)                                 | Community expectations and moderation                         |
+| [License](../LICENSE) / [third-party notices](../THIRD_PARTY_NOTICES.md) | MIT project terms and separately licensed content             |
+| [User preferences](user-preferences.md)                                  | Maintained product and delivery choices                       |
+
+See the [changelog](../CHANGELOG.md) for notable changes; Unreleased entries are not live release claims.
+
+## Historical evidence
+
+[Engine acceptance](acceptance.md), [engine review](review.md), [workspace review](workspace-review.md), and performance evidence linked from [validation](validation.md) document specific candidates and environments. They do not certify a later commit, a new browser/device, a provider account or the current live deployment. Record new evidence with its exact revision and scope.
+
+Update the relevant guide when behavior changes. Link the contract owner rather than copying evolving setup, command, model or data-format lists into multiple guides.

@@ -1,0 +1,69 @@
+# Changelog
+
+Current version: **0.1.0-alpha.1**. Short summaries for end users and executives; the linked Git diff is the full changelog. See [SemVer and release rules](docs/releasing.md#semantic-versioning).
+
+## Unreleased
+
+- Keep screen recording running when its dialog closes, with optional compact controls to reopen or stop it, a clearer screen-recording icon and a retained take for review. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/persistent-screen-recording).
+
+- Browse 1,039 tagged, bundled CC0 sound effects by name, category or clickable tags, preview them, and add selected sounds to Media for editing. Agents can search/filter the shared sound catalogue and import a chosen ID through existing Media tools. Source/licence evidence and reproducible WAV preparation are included. Propose an additive minor prerelease change. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/sound-effects-library).
+
+- Open the app to the saved workspace list and give each editor a `/workspace/<id>` URL with reload, history and legacy-link support. Existing local projects stay compatible; propose a minor prerelease feature. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/workspace-url-paths).
+
+- Remove bundled Whisper and its model downloads. Editing skills request STT/TTS from external agents; existing transcripts, captions and media remain compatible. This removes speech inference APIs; propose a breaking prerelease change. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/agent-speech-only).
+
+- Guide external agents to index assets with useful context and source-timed transcripts, and verify saved content before reporting completion. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/asset-indexing-workflow).
+
+- Click Media assets to preview images/audio/video and edit their context and transcript directly, without changing the timeline. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/asset-preview).
+
+- Show browser-agent tool readiness and request activity, with connection help and a manual refresh that retains accepted jobs/results. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/webmcp-connection-status).
+
+- Organize assets into previewable source clips with context and a compact, timestamped transcript timeline. Discover 13 portable editing skills through WebMCP, including an agent-led STT normalization pass. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/webmcp-skills).
+
+- Let browser agents create/open projects and import local files from an empty workspace, including large recordings through browser file selection. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/webmcp-project-setup).
+
+- Let compatible browser agents inspect and edit the viewed project through WebMCP, including history, Media, previews and local exports. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...wilsonle/webmcp-project-control).
+
+- Removed agent chat, provider connections, remote AI services and the public AI module. Manual editing, storyboard and local Whisper remain. Existing project/media data and legacy backups are preserved ([#350](https://github.com/WilsonLe/LocalCut/issues/350)). This removes the former headless AI API; propose a breaking prerelease change when packaging the release.
+
+- Report required text/media fields and incompatible track kinds in safe, located edit-repair feedback.
+
+- Help Klip resolve requested Media references through access already granted by the workspace, instead of asking for redundant attachment or authorization. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/library-scope-recovery).
+
+- Prevent brief audio transients and missing onset samples at trimmed or looping clip boundaries. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/audio-sample-boundaries).
+
+- Guide Klip toward deliberate source curation, connected sequences and appropriate sound, and keep creative acceptance distinct from technical completion. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/aesthetic-travel-edit).
+
+- Klip reports safe edit-rule failures, reuses validated batches by ID and preserves reusable edits through compaction. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/edit-recovery-compaction).
+
+- Start editing directly with one agent, optional local notes and progress from completed receipts; retain independent completion review and recoverable history. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/single-agent-lifecycle).
+
+- Explain how to resolve reference Media access before retrying saved-index reads. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/assistant-loop-recovery).
+
+- Complete asset indexing when otherwise valid model descriptions exceed saved label limits; preserve the full response locally. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/bounded-index-labels).
+
+- Run independent chat tools and asset indexing in parallel while dependent work stays ordered; keep each final reply below its tool and action results. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/main...codex/parallel-chat-tools).
+
+- Keep project chats and drafts across reloads, rename titles, archive/restore sessions and fork independent conversations locally. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/182/files).
+- Export a chat from its own header into a local Markdown/JSON archive, with saved downloads and recovery through Task queue. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/186/files).
+
+- Plan each project in a local Storyboard beside the Editor, with drawing, shared history and approved assistant edits. Keep backups before opening storyboard projects in older releases. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/168/files).
+- Snap the timeline cursor to nearby clip edges by default, with a remembered off switch; direct edits show their results without success notifications. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/119/files).
+- Shorten or extend clip ends directly; repeating audio/video shows loop-back markers in the timeline.
+- Preview media placement before dropping clips onto the timeline, and animate entire tracks while reordering them.
+- Keep AI connections and editing code consistent across cached releases; headless integrations can discover matching module versions.
+- Recover missing deployment assets with an explicit reload, preserving saved projects, and load fonts from consistent snapshots.
+- Manage tracks through compact menus: rename, disable, mute, solo, lock, duplicate, reorder, clear or delete, with the same operations available in reviewed AI proposals. [Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/122/files).
+
+[Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/pull/125/files)
+
+## v0.1.0-alpha.1 — Unreleased alpha
+
+- Edit and export videos locally, with timeline controls, styled/animated text and local transcription.
+- Use optional AI for reviewed editing proposals, speech generation and explicitly approved remote services.
+- Transfer selected projects, versions and originals through portable backups.
+- Get started and contribute more easily with clearer setup, deployment, support and privacy guidance, plus MIT licensing.
+
+This is an alpha candidate, not a published/tagged release. The diff covers development since repository initialization through the current candidate; its pending branch link will become an immutable tag/commit comparison when released.
+
+[Full changelog — Git diff](https://github.com/WilsonLe/LocalCut/compare/c7aa85017d7c3a65c70d3b51fd03607c0fbaa5e9..codex/open-source-docs)

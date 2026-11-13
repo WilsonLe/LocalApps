@@ -1,0 +1,338 @@
+import { behaviorBases } from './coverage-bases';
+import { openWorkspaceGroup } from './workspace-settings-helper';
+import { versionJourney } from './workspace-version-journey';
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+async function create(page: Page, name: string) {
+  const browser = page.getByRole('main', { name: 'Projects', exact: true });
+  await browser
+    .getByRole('button', { name: 'New project', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'New project', exact: true });
+  await dialog.getByLabel('Project name').fill(name);
+  await dialog
+    .getByRole('button', { name: 'Create project', exact: true })
+    .click();
+  await expect(browser).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open project', exact: true }),
+  ).toContainText(name);
+}
+
+for (const base of behaviorBases) {
+  test(`project navigation imports a backup and handles long names ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    const name = 'Imported film ' + 'with a long project name '.repeat(16);
+    const backup = await page.evaluate(
+      async ({ base, name }) => {
+        const { createEditor } = await import(`${base}editor.js`);
+        const editor = await createEditor();
+        try {
+          const project = await editor.projects.create(name);
+          const backup = await editor.projects.exportJSON(project.id);
+          await editor.projects.delete(project.id);
+          return backup;
+        } finally {
+          await editor.dispose();
+        }
+      },
+      { base, name },
+    );
+    const browser = page.getByRole('main', { name: 'Projects' });
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      browser
+        .getByRole('button', { name: 'Import backup', exact: true })
+        .click(),
+    ]);
+    await chooser.setFiles({
+      name: 'project.localcut.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(backup),
+    });
+    await expect(browser).not.toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Open project', exact: true }),
+    ).toContainText(name);
+    await page.keyboard.press('ControlOrMeta+o');
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(
+      browser
+        .locator('.project-browser-row')
+        .filter({ hasText: /Imported film/ }),
+    ).toContainText('Current');
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await browser
+      .getByRole('textbox', { name: 'Search projects' })
+      .fill('LONG PROJECT NAME');
+    await expect(browser.getByRole('listitem')).toHaveCount(1);
+    await browser
+      .locator('.project-browser-row')
+      .filter({ hasText: /Imported film/ })
+      .focus();
+    await page.keyboard.press('Enter');
+    await expect(browser).not.toBeVisible();
+    await expect(
+      page.getByRole('main', { name: 'Video editor' }),
+    ).toBeFocused();
+  });
+
+  test(
+    '@journey ' +
+      [
+        `project navigation searches, switches and preserves editing ${base}`,
+        `project version browsing recreates the read-only editor at ${base}`,
+      ].join(' | '),
+    async ({ page }, testInfo) => {
+      await test.step(`project navigation searches, switches and preserves editing ${base}`, async () => {
+        await page.goto(base);
+        const browser = page.getByRole('main', {
+          name: 'Projects',
+          exact: true,
+        });
+        await expect(
+          browser.getByRole('heading', { name: 'Projects', exact: true }),
+        ).toBeFocused();
+        await expect(
+          browser.getByText('No saved projects yet', { exact: true }),
+        ).toBeVisible();
+        await create(page, 'Zebra film');
+        await page
+          .getByRole('button', { name: 'Commands', exact: true })
+          .click();
+        const palette = page.getByRole('dialog', {
+          name: 'Commands',
+          exact: true,
+        });
+        await palette.getByRole('combobox').fill('Add text');
+        await palette.getByRole('option', { name: /Add text/ }).click();
+        await page
+          .getByRole('button', { name: 'Insert Plain text', exact: true })
+          .click();
+        await expect(
+          page.getByRole('dialog', { name: 'Clip properties', exact: true }),
+        ).toBeVisible();
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        const selected = await page
+          .locator('.timeline-clip[aria-pressed="true"]')
+          .count();
+        expect(selected).toBe(1);
+        await page
+          .getByRole('button', { name: 'Play preview', exact: true })
+          .click();
+        await expect
+          .poll(async () =>
+            Number(
+              await page
+                .getByRole('slider', { name: 'Playhead position' })
+                .getAttribute('aria-valuenow'),
+            ),
+          )
+          .toBeGreaterThan(0);
+        const projectMenu = await openWorkspaceGroup(page, 'Project');
+        await projectMenu
+          .getByRole('menuitem', { name: 'Open project', exact: true })
+          .click();
+        await expect(browser).toBeVisible();
+        await expect(
+          page.getByRole('main', { name: 'Video editor' }),
+        ).not.toBeVisible();
+        await expect(
+          browser
+            .locator('.project-browser-row')
+            .filter({ hasText: /Zebra film/ }),
+        ).toContainText('1 clip');
+        await expect(
+          browser
+            .locator('.project-browser-row')
+            .filter({ hasText: /Zebra film/ }),
+        ).toContainText('Current');
+        await browser
+          .getByRole('button', { name: 'Back to editor', exact: true })
+          .click();
+        await expect(
+          page.getByRole('main', { name: 'Video editor' }),
+        ).toBeFocused();
+        await expect(
+          page.getByRole('button', { name: 'Play preview', exact: true }),
+        ).toBeVisible();
+        const playhead = page.getByRole('slider', {
+          name: 'Playhead position',
+        });
+        const stopped = await playhead.getAttribute('aria-valuenow');
+        await page.waitForTimeout(150);
+        expect(await playhead.getAttribute('aria-valuenow')).toBe(stopped);
+        expect(
+          await page.locator('.timeline-clip[aria-pressed="true"]').count(),
+        ).toBe(selected);
+        await playhead.focus();
+        // Playback can reach the endpoint under load. Seek from a known frame.
+        await page.keyboard.press('Home');
+        await expect(playhead).toHaveAttribute('aria-valuenow', '0');
+        await page.keyboard.press('End');
+        const scrubbed = await playhead.getAttribute('aria-valuenow');
+        expect(Number(scrubbed)).toBeGreaterThan(0);
+        await page
+          .getByRole('button', { name: 'Open project', exact: true })
+          .click();
+        await browser
+          .locator('.project-browser-row')
+          .filter({ hasText: /Zebra film/ })
+          .click();
+        await expect(playhead).toHaveAttribute('aria-valuenow', scrubbed!);
+        expect(
+          await page.locator('.timeline-clip[aria-pressed="true"]').count(),
+        ).toBe(selected);
+        await page.keyboard.press('ControlOrMeta+o');
+        await create(page, 'Alpha film');
+        await page.keyboard.press('ControlOrMeta+o');
+        const rows = browser
+          .getByRole('list', { name: 'Saved projects' })
+          .locator('.project-browser-row');
+        await expect(rows).toHaveCount(2);
+        await expect(rows.first()).toContainText('Alpha film');
+        const search = browser.getByRole('textbox', {
+          name: 'Search projects',
+        });
+        await search.fill('  ZEBRA  ');
+        await expect(rows).toHaveCount(1);
+        await expect(rows.first()).toContainText('Zebra film');
+        await search.fill('No such project');
+        await expect(
+          browser.getByText('No matching projects', { exact: true }),
+        ).toBeVisible();
+        await browser
+          .getByRole('button', { name: 'Clear search', exact: true })
+          .click();
+        await expect(search).toHaveValue('');
+        await page.screenshot({
+          path: testInfo.outputPath('projects-desktop.png'),
+          animations: 'disabled',
+        });
+        await page.setViewportSize({ width: 320, height: 800 });
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await expect(
+          browser.getByRole('button', { name: 'New project', exact: true }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: testInfo.outputPath('projects-narrow.png'),
+          fullPage: true,
+          animations: 'disabled',
+        });
+        await browser
+          .locator('.project-browser-row')
+          .filter({ hasText: /Zebra film/ })
+          .click();
+        await expect(
+          page.getByRole('button', { name: 'Open project', exact: true }),
+        ).toContainText('Zebra film');
+        await expect(
+          page.getByRole('button', {
+            name: 'Your story starts here',
+            exact: true,
+          }),
+        ).toBeVisible();
+        await page.reload();
+        await page
+          .getByRole('button', { name: 'Open project', exact: true })
+          .click();
+        await expect(
+          browser
+            .locator('.project-browser-row')
+            .filter({ hasText: /Zebra film/ }),
+        ).toContainText('1 clip');
+        await browser
+          .locator('.project-browser-row')
+          .filter({ hasText: /Zebra film/ })
+          .click();
+        await expect(
+          page.getByRole('button', {
+            name: 'Your story starts here',
+            exact: true,
+          }),
+        ).toBeVisible();
+      });
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await versionJourney(page, base);
+    },
+  );
+
+  test(`project navigation retries storage failures and refreshes external changes ${base}`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      await editor.dispose();
+    }, base);
+    await page.evaluate(() =>
+      localStorage.removeItem('localcut.project-catalog.v1'),
+    );
+    await page.addInitScript(() => {
+      const open = indexedDB.open.bind(indexedDB);
+      let first = true;
+      indexedDB.open = ((...args: Parameters<typeof indexedDB.open>) => {
+        if (first) {
+          first = false;
+          throw new Error('Allow browser storage and try again.');
+        }
+        return open(...args);
+      }) as typeof indexedDB.open;
+    });
+    await page.reload();
+    const browser = page.getByRole('main', { name: 'Projects' });
+    await expect(page.locator('[data-sonner-toast]')).toContainText(
+      'Allow browser storage',
+    );
+    await browser
+      .getByRole('button', { name: 'Try again', exact: true })
+      .click();
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+    const id = await page.evaluate(async (base) => {
+      const { createEditor } = await import(`${base}editor.js`);
+      const editor = await createEditor();
+      try {
+        return (await editor.projects.create('External project')).id;
+      } finally {
+        await editor.dispose();
+      }
+    }, base);
+    await expect(
+      browser.getByRole('button', { name: /^External project/ }),
+    ).toBeVisible();
+    await page.evaluate(
+      async ({ base, id }) => {
+        const { createEditor } = await import(`${base}editor.js`);
+        const editor = await createEditor();
+        try {
+          await editor.projects.delete(id);
+        } finally {
+          await editor.dispose();
+        }
+      },
+      { base, id },
+    );
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+    await browser.getByRole('button', { name: 'Refresh projects' }).click();
+    await expect(
+      browser.getByText('No saved projects yet', { exact: true }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(base);
+  });
+}

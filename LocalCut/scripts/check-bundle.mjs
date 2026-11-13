@@ -1,0 +1,156 @@
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { checkFonts } from './check-fonts.mjs';
+import { checkSounds } from './check-sounds.mjs';
+import { checkSkills, skillIndex, skillsDirectory } from './skills-index.mjs';
+await checkSkills();
+const sourceSkills = await skillIndex(skillsDirectory);
+async function files(path) {
+  const result = [];
+  for (const name of await readdir(path)) {
+    const full = join(path, name);
+    if ((await stat(full)).isDirectory()) result.push(...(await files(full)));
+    else result.push(full);
+  }
+  return result;
+}
+for (const root of ['dist', 'dist-root']) {
+  await checkSounds(`${root}/sounds`);
+  assert.equal(
+    await readFile(`${root}/sounds/catalog.json`, 'utf8'),
+    await readFile('public/sounds/catalog.json', 'utf8'),
+    'Packaged sound catalogue differs from source',
+  );
+  assert.equal(
+    await readFile(`${root}/404.html`, 'utf8'),
+    await readFile(`${root}/index.html`, 'utf8'),
+    'Deep-link fallback must match the built application',
+  );
+  await checkSkills(join(root, 'skills'));
+  assert.deepEqual(
+    await skillIndex(join(root, 'skills')),
+    sourceSkills,
+    'Published skills differ from canonical source files',
+  );
+  const fontFiles = await checkFonts(root);
+  const storyboardRoot = 'storyboard/excalidraw-0.18.1/';
+  const drawingFonts = JSON.parse(
+    await readFile(`${root}/${storyboardRoot}manifest.json`, 'utf8'),
+  );
+  const packageRoot = join(
+    import.meta.dirname,
+    '../node_modules/@excalidraw/excalidraw/dist/prod',
+  );
+  assert(
+    Object.keys(drawingFonts).length > 0,
+    'Missing drawing font inventory',
+  );
+  for (const [name, digest] of Object.entries(drawingFonts)) {
+    assert(
+      /^fonts\/[a-zA-Z0-9 /_.-]+\.woff2$/.test(name) && !name.includes('..'),
+      'Invalid storyboard font path',
+    );
+    const bytes = await readFile(`${root}/${storyboardRoot}${name}`);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
+    assert.equal(
+      createHash('sha256')
+        .update(await readFile(join(packageRoot, name)))
+        .digest('hex'),
+      digest,
+    );
+    fontFiles.add(`${root}/${storyboardRoot}${name}`);
+  }
+  const drawingHashes = new Set(Object.values(drawingFonts));
+  for (const file of await files(`${root}/assets`)) {
+    if (
+      file.endsWith('.woff2') &&
+      drawingHashes.has(
+        createHash('sha256')
+          .update(await readFile(file))
+          .digest('hex'),
+      )
+    )
+      fontFiles.add(file);
+  }
+  const manifest = JSON.parse(
+    await readFile(`${root}/.vite/manifest.json`, 'utf8'),
+  );
+  const entry = Object.values(manifest).find(
+    (v) => v.isEntry && v.src === 'index.html',
+  );
+  assert(entry, 'App manifest entry missing');
+  const optionalEntries = new Set(['editor.js']);
+  const discovery = JSON.parse(await readFile(`${root}/modules.json`, 'utf8'));
+  assert.equal(discovery.version, 1);
+  assert(/^[a-f0-9]{64}$/.test(discovery.release));
+  assert.equal(
+    discovery.release,
+    createHash('sha256')
+      .update(JSON.stringify(discovery.modules))
+      .digest('hex'),
+  );
+  for (const name of ['editor']) {
+    const moduleEntry = Object.values(manifest).find(
+      (v) => v.isEntry && v.src === `src/${name}/index.ts`,
+    );
+    assert(
+      moduleEntry?.file.startsWith(`assets/${name}-`) &&
+        moduleEntry.file.endsWith('.js'),
+      `Hashed ${name} entry missing`,
+    );
+    optionalEntries.add(moduleEntry.file);
+    assert.equal(discovery.modules[name], moduleEntry.file);
+    assert.equal(
+      await readFile(`${root}/${name}.js`, 'utf8'),
+      `export * from './${moduleEntry.file}';\n`,
+      `Stable ${name} alias does not match its manifest entry`,
+    );
+    await stat(`${root}/types/${name}/index.d.ts`);
+  }
+  const graph = new Set();
+  function visit(chunk) {
+    if (graph.has(chunk.file)) return;
+    graph.add(chunk.file);
+    for (const css of chunk.css ?? []) graph.add(css);
+    for (const id of chunk.imports ?? []) visit(manifest[id]);
+  }
+  visit(entry);
+  let js = 0,
+    css = 0,
+    total = 0;
+  for (const path of graph) {
+    const bytes = gzipSync(await readFile(`${root}/${path}`)).length;
+    if (path.endsWith('.js')) js += bytes;
+    if (path.endsWith('.css')) css += bytes;
+  }
+  for (const file of await files(root)) {
+    assert(
+      !/\.(onnx|wasm|woff2?)$/.test(file) || fontFiles.has(file),
+      'Heavy model/runtime/font artifact shipped: ' + file,
+    );
+    assert(
+      !file.includes('harness') && !file.includes('fixture'),
+      'Test artifact shipped',
+    );
+    if (/\.(js|css)$/.test(file))
+      total += gzipSync(await readFile(file)).length;
+  }
+  assert(js <= 150 * 1024, `Initial JS ${js}`);
+  assert(css <= 30 * 1024, `Initial CSS ${css}`);
+  assert(total <= 5 * 1024 * 1024, `Aggregate JS/CSS ${total}`);
+  assert(
+    ![...graph].some((p) => optionalEntries.has(p) || p.includes('worker')),
+    'Engine eagerly loaded',
+  );
+  console.log(
+    JSON.stringify({
+      root,
+      initialJavaScriptGzip: js,
+      initialCssGzip: css,
+      aggregateGzip: total,
+    }),
+  );
+}

@@ -1,0 +1,15 @@
+{
+  "name": "localapps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "node scripts/build-pages.mjs",
+    "test": "node --test tests/pages.test.mjs",
+    "preview": "node scripts/serve-pages.mjs"
+  }
+}

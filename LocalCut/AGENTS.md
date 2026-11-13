@@ -1,0 +1,28 @@
+# LocalCut agent guide
+
+## Start here
+
+- Start with the [current preference index](docs/current-preferences.md), then read the decisions/contracts for the changed area. Preserve the [dated preference record](docs/user-preferences.md) and update it when the user states a durable preference. Newer explicit choices take precedence.
+- Use the [setup guide](docs/setup.md) and [command reference](docs/development.md#commands), then the [development guide](docs/development.md) for module ownership, focused checks, and failure recovery. Read the relevant API, storage, AI, or deployment contract only when the change touches it.
+- Before editing a file, read the `AGENTS.md` files in its ancestor directories, including the nearest module guide. Root guidance applies everywhere; nested guidance adds the local contract. Keep instructions at their narrowest useful scope and link shared rules instead of copying them.
+- Inspect the current branch, dirty files, base, and linked issue/PR before editing. Reuse the task's isolated feature worktree and existing tracking issue; preserve unrelated work. Keep the issue's scope current before implementation.
+
+## Keep one development cycle short
+
+- Prefer the agent host's built-in browser for interactive LocalCut use and manual previews before opening Chrome. Follow the [browser selection contract](docs/browser-support.md#agent-browser-selection); required native Chrome acceptance gates still use stable Chrome.
+- Product agent AI was removed by explicit user choice on 11 November 2026. Do not restore assistant/chat/provider features or require assistant paths for editor changes; see [the current preference index](docs/current-preferences.md).
+- Change the existing owner of a behavior. UI controls call the shared editor APIs; do not duplicate editing logic in components.
+- Apply the [coding rules and examples](CONTRIBUTING.md#coding-rules). Refactor by responsibility with explicit typed dependencies; preserve revision, cleanup and lazy-loading boundaries. Mechanical rules belong in local checks, not repeated prose.
+- During iteration, run the smallest meaningful test for the changed behavior. `pnpm test:ui --grep 'speed rounding'` is an example of a focused production-UI check that verifies and reuses both static builds. Use the [check-selection recipes](docs/development.md) for other layers.
+- Keep builds and tests in sequence when they share `dist` or `dist-root`. Parallelize isolated tests/read-only investigation; use separate ports and storage namespaces for independent browser runs.
+- Before a draft handoff, run focused behavior checks, static checks, `pnpm check:docs`, and affected build/native gates. Run full `pnpm check` plus required real Chrome performance gates when merging is requested. For documentation-only changes, validate formatting, links and new commands. Follow [verification stages](docs/development.md#expand-verification-at-the-boundary); do not repeat successful expensive checks without changed inputs, a failure, or an unresolved concern.
+- Run validation locally. The user has disabled remote CI; do not add or re-enable hosted check/performance workflows. Pages deploys automatically on pushes to `main`; release packaging is separate from validation.
+- Freeze the candidate and run one independent draft-PR review-and-address cycle. Fix accepted findings and rerun affected checks; do not automatically start another independent review. Record the reviewed and resulting heads and distinguish author validation from independent review.
+- Keep the issue and PR linked both ways. Report the exact head/base, checks, limitations, and release state. Merge requires authorization. Pushes to `main` automatically deploy Pages under the recorded user preference.
+
+## Scoped entry points
+
+- [Application and runtime](src/AGENTS.md): shared source constraints, with module guides below it.
+- [Tests](tests/AGENTS.md): isolation and evidence, with separate unit, browser, and live-provider guides.
+- [Build and tooling](scripts/AGENTS.md), [release workflow](.github/workflows/AGENTS.md), and [documentation](docs/AGENTS.md).
+- Keep dependencies and the lockfile pinned. Pinned dependencies and artifact hashes are contracts. Required native codec evidence cannot be replaced by mocks or a different browser channel.

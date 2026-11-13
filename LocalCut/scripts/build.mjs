@@ -1,0 +1,34 @@
+import { inputHash, recordBuild, runPnpm, target } from './build-state.mjs';
+import { copyFile, mkdir, rename } from 'node:fs/promises';
+import { fontSnapshot } from './font-snapshot.ts';
+import { checkSounds } from './check-sounds.mjs';
+
+const rootBuild = process.argv.includes('--root');
+const build = target(rootBuild);
+await checkSounds();
+const input = await inputHash(build);
+await runPnpm([
+  'exec',
+  'vite',
+  'build',
+  ...(rootBuild ? ['--base=/', '--outDir', 'dist-root'] : []),
+]);
+await runPnpm([
+  'exec',
+  'tsc',
+  '-p',
+  'tsconfig.types.json',
+  ...(rootBuild ? ['--outDir', 'dist-root/types'] : []),
+]);
+// Move rather than duplicate the catalog. Its URL identifies the snapshot,
+// so old HTTP cache entries cannot be combined with a new family manifest.
+const revision = fontSnapshot();
+await rename(`${build.directory}/fonts`, `${build.directory}/.fonts-snapshot`);
+await mkdir(`${build.directory}/fonts`);
+await rename(
+  `${build.directory}/.fonts-snapshot`,
+  `${build.directory}/fonts/${revision}`,
+);
+// GitHub Pages serves this document for workspace deep links, preserving the URL.
+await copyFile(`${build.directory}/index.html`, `${build.directory}/404.html`);
+await recordBuild(build, input);
