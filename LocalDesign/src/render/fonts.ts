@@ -133,15 +133,14 @@ export function resolveFont(node: DesignNode, doc?: DesignDocument) {
     status === "exact"
       ? null
       : `${node.fontId && !explicit ? "Missing font ID. " : ""}Requested ${node.fontFamily} ${node.fontWeight} ${node.fontStyle}; ${status === "mapped" ? "mapped" : "substituted"} with ${chosen.family} ${chosen.weight} ${chosen.style}. ${status === "mapped" ? "Clear replacement to restore the request." : "Choose a replacement or add the licensed font."}`;
+  const coverage = record?.files.map((file) => fontInfo(file).characters) ?? [];
   const missingGlyphs = record
     ? [
         ...new Set(
           Array.from(node.text.normalize("NFC")).filter(
             (c) =>
               !/\s/u.test(c) &&
-              !record.files.some((f) =>
-                fontInfo(f).characters.has(c.codePointAt(0)!),
-              ),
+              !coverage.some((characters) => characters.has(c.codePointAt(0)!)),
           ),
         ),
       ]
@@ -280,8 +279,22 @@ export async function fontsReady(doc?: DesignDocument) {
   await ready;
   if (doc) await validateFontFaces(doc.fonts);
 }
-export function exportFonts(doc: DesignDocument) {
+export function exportFonts(doc: DesignDocument, includeAllBundled = false) {
   const records = new Map(doc.fonts.map((f) => [f.id, f]));
+  // A native backup can activate an unused theme or insert a reusable definition later.
+  // Keep the small complete bundled set inside its existing reserved byte budget.
+  if (includeAllBundled)
+    for (const choice of availableFonts(doc)) {
+      const record =
+        doc.fonts.find((font) => font.id === choice.id) ??
+        bundled.get(choice.id);
+      requireThat(
+        record,
+        "FONT_UNAVAILABLE",
+        "Wait for fonts before exporting.",
+      );
+      records.set(choice.id, record);
+    }
   for (const node of doc.nodes.filter((n) => n.type === "text")) {
     const resolved = resolveFont(node, doc);
     requireThat(

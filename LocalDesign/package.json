@@ -1,6 +1,6 @@
 {
   "name": "localdesign",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -9,8 +9,9 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4179 --strictPort",
-    "build": "npm run check:ui && npm run check:skills && tsc -b && vite build",
+    "build": "npm run check:ui && npm run check:skills && npm run check:icons && tsc -b && vite build",
     "check:ui": "node ../scripts/check-ui-boundary.mjs && vitest run tests/ui-foundation.test.ts",
+    "check:icons": "node scripts/build-icons.mjs --check",
     "preview": "vite preview --host 127.0.0.1 --port 4179 --strictPort",
     "typecheck": "tsc -b",
     "test": "vitest run",
@@ -31,9 +32,11 @@
     "fontkit": "3.0.0",
     "harfbuzzjs": "1.6.4",
     "idb": "8.0.4",
+    "jspdf": "4.2.1",
     "lucide-react": "1.72.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "svg2pdf.js": "2.9.0",
     "zod": "4.6.7"
   },
   "devDependencies": {

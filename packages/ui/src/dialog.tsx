@@ -34,7 +34,7 @@ const contentStyles = {
   standard:
     "fixed top-1/2 left-1/2 z-50 grid h-auto max-h-[min(48rem,calc(var(--app-viewport-height)-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 content-start gap-6 overflow-y-auto overscroll-contain rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
   compact:
-    "fixed left-1/2 top-1/2 z-60 grid w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2.5rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none",
+    "fixed left-1/2 top-1/2 z-60 grid grid-cols-1 w-[calc(100%-2rem)] max-w-lg max-h-[calc(100dvh-2.5rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-6 text-popover-foreground shadow-xl outline-none",
 };
 export const dialogOverlayStyles = overlayStyles.compact;
 export const dialogContentStyles = contentStyles.compact;
