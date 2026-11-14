@@ -1,3 +1,6 @@
+import { FieldSet, FieldLegend } from '@localapps/ui/field';
+import { Progress } from '@localapps/ui/progress';
+import { Input } from '@localapps/ui/input';
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { toast } from './notifications';
@@ -8,7 +11,7 @@ import type {
   WorkspaceBackup,
   WorkspaceSelection,
 } from '../editor';
-import { Checkbox } from '../components/ui/checkbox';
+import { Checkbox } from '@localapps/ui/checkbox';
 import { Button } from '../components/ui/button';
 import {
   Dialog,
@@ -17,7 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { downloadFile } from './helpers';
 import {
   importWorkspaceSettings,
@@ -46,14 +49,13 @@ function Choice({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex min-h-10 items-center gap-3 rounded-md px-2 py-1 text-sm hover:bg-muted">
-      <Checkbox
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={onChange}
-      />
-      <span className="min-w-0 break-words">{children}</span>
-    </label>
+    <Checkbox
+      label={<span className="min-w-0 break-words">{children}</span>}
+      labelClassName="flex min-h-10 items-center gap-3 rounded-md px-2 py-1 text-sm hover:bg-muted"
+      checked={checked}
+      disabled={disabled}
+      onCheckedChange={onChange}
+    />
   );
 }
 const toggle = (values: string[], id: string, checked: boolean) =>
@@ -336,7 +338,7 @@ export default function WorkspaceTransferDialog({
         </DialogHeader>
         {mode === 'import' && (
           <>
-            <input
+            <Input
               ref={importInput}
               aria-label="Workspace backup file"
               type="file"
@@ -370,8 +372,13 @@ export default function WorkspaceTransferDialog({
           >
             {!projectOnly &&
               (backup.settings?.appearance || backup.settings?.workspace) && (
-                <fieldset disabled={pending}>
-                  <legend className="text-sm font-medium">Settings</legend>
+                <FieldSet disabled={pending} className="gap-0">
+                  <FieldLegend
+                    variant="label"
+                    className="mb-0 text-sm font-medium"
+                  >
+                    Settings
+                  </FieldLegend>
                   {backup.settings?.appearance && (
                     <Choice
                       disabled={pending}
@@ -390,10 +397,13 @@ export default function WorkspaceTransferDialog({
                       Workspace preferences
                     </Choice>
                   )}
-                </fieldset>
+                </FieldSet>
               )}
-            <fieldset disabled={pending}>
-              <legend className="flex w-full items-center justify-between text-sm font-medium">
+            <FieldSet disabled={pending} className="gap-0">
+              <FieldLegend
+                variant="label"
+                className="mb-0 flex w-full items-center justify-between text-sm font-medium"
+              >
                 <span>
                   {projectOnly ? 'Project' : 'Projects'} ({projects.length}/
                   {backup.projects.length})
@@ -418,7 +428,7 @@ export default function WorkspaceTransferDialog({
                     </Button>
                   </span>
                 )}
-              </legend>
+              </FieldLegend>
               {backup.projects.map((p) => (
                 <Choice
                   disabled={pending}
@@ -451,9 +461,11 @@ export default function WorkspaceTransferDialog({
                   Include project versions
                 </Choice>
               )}
-            </fieldset>
-            <fieldset disabled={pending}>
-              <legend className="text-sm font-medium">Source files</legend>
+            </FieldSet>
+            <FieldSet disabled={pending} className="gap-0">
+              <FieldLegend variant="label" className="mb-0 text-sm font-medium">
+                Source files
+              </FieldLegend>
               <Choice
                 checked={includeAssets}
                 onChange={setIncludeAssets}
@@ -489,7 +501,7 @@ export default function WorkspaceTransferDialog({
                     Missing originals can only be exported as metadata.
                   </p>
                 )}
-            </fieldset>
+            </FieldSet>
           </div>
         )}
         {pending && (
@@ -497,10 +509,9 @@ export default function WorkspaceTransferDialog({
             <LoaderCircle className="size-4 animate-spin" />
             {stage}
             {fraction !== undefined && (
-              <progress
+              <Progress
                 aria-label="Workspace transfer progress"
-                value={fraction}
-                max={1}
+                value={fraction * 100}
                 className="min-w-0 flex-1"
               />
             )}

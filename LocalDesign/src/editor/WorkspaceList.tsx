@@ -1,5 +1,7 @@
+import { Spinner } from "@localapps/ui/spinner";
+import { Empty, EmptyTitle } from "@localapps/ui/empty";
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, LoaderCircle, Trash2 } from "lucide-react";
+import { FolderOpen, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   AlertDialog,
@@ -8,7 +10,7 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-} from "../components/ui/alert-dialog";
+} from "@localapps/ui/alert-dialog";
 import type { Workspace } from "../storage/workspace";
 import { workspacePath } from "./workspaceRoute";
 
@@ -108,10 +110,10 @@ export function WorkspaceList({
           </div>
         )}
         {loading || (!documents && !listError) ? (
-          <div className="workspace-empty" role="status">
-            <LoaderCircle size={24} />
+          <Empty className="workspace-empty" role="status">
+            <Spinner aria-hidden="true" className="size-6" />
             Loading workspaces…
-          </div>
+          </Empty>
         ) : documents?.length ? (
           <ul className="workspace-list" aria-label="Saved workspaces">
             {documents.map((d) => (
@@ -152,10 +154,10 @@ export function WorkspaceList({
           </ul>
         ) : (
           !listError && (
-            <div className="workspace-empty">
+            <Empty className="workspace-empty">
               <FolderOpen size={32} />
-              <h2>No workspaces yet</h2>
-            </div>
+              <EmptyTitle as="h2">No workspaces yet</EmptyTitle>
+            </Empty>
           )
         )}
       </div>

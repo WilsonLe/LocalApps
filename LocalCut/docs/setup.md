@@ -1,6 +1,6 @@
 # Set up LocalCut from source
 
-For editing without a source checkout, [open LocalCut](https://wilsonle.github.io/LocalCut/) and follow the [first-edit guide](getting-started.md).
+For editing without a source checkout, [open LocalCut](https://wilsonle.github.io/LocalApps/LocalCut/) and follow the [first-edit guide](getting-started.md).
 
 ## Prerequisites
 
@@ -12,10 +12,10 @@ Local editing requires no runtime environment variables, accounts, backend serve
 
 ```sh
 npm install --global pnpm@11.25.0
-git clone https://github.com/WilsonLe/LocalCut.git
-cd LocalCut
+git clone https://github.com/WilsonLe/LocalApps.git
+cd LocalApps
 pnpm install --frozen-lockfile
-pnpm dev
+pnpm --dir LocalCut dev
 ```
 
 Open the localhost URL printed by Vite. Contributors using a fork should substitute their fork's clone URL and follow [CONTRIBUTING.md](../CONTRIBUTING.md) to create an isolated feature worktree. Keep dependency versions and the lockfile pinned.

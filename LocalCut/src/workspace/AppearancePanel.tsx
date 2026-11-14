@@ -1,3 +1,5 @@
+import { FieldSet, FieldLegend } from '@localapps/ui/field';
+import { Label } from '@localapps/ui/label';
 import { useEffect, useRef } from 'react';
 import { Moon, Monitor, Sun, Shuffle, RotateCcw, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -47,7 +49,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
   ) {
     return (
       <div className="appearance-field" key={key}>
-        <label htmlFor={`appearance-${key}`}>{labels[key]}</label>
+        <Label htmlFor={`appearance-${key}`}>{labels[key]}</Label>
         <SettingsSelect
           id={`appearance-${key}`}
           label={labels[key]}
@@ -109,8 +111,8 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
           })}
         </div>
         {picker('base')}
-        <fieldset className="appearance-field">
-          <legend>Theme</legend>
+        <FieldSet className="appearance-field gap-0">
+          <FieldLegend className="mb-0">Theme</FieldLegend>
           <div className="appearance-swatches">
             {appearanceOptions.theme.map((theme) => {
               const [chroma, hue, light] = themeColors[theme];
@@ -132,7 +134,7 @@ export default function AppearancePanel({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
-        </fieldset>
+        </FieldSet>
         <div className="appearance-divider" />
         {picker('interfaceSize')}
         <AppearanceFontPicker

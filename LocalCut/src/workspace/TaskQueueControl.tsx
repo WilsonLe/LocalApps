@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { ListTodo } from 'lucide-react';
 import type { Editor, TaskRecord } from '../editor';
 import { Button } from '../components/ui/button';
-import { Tooltip } from '../components/ui/tooltip';
+import { Tooltip } from '@localapps/ui/tooltip';
 const TaskQueueDialog = onDemandDialog(
   () => import('./TaskQueueDialog'),
   ({ onClose }) => ({ title: 'Task queue', onClose: onClose }),

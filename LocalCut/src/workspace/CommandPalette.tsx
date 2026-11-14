@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandList,
   CommandShortcut,
-} from '../components/ui/command';
+} from '@localapps/ui/command';
 import type { WorkspaceCommand } from './commands';
 
 export default function CommandPalette({

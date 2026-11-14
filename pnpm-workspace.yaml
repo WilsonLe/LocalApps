@@ -1,0 +1,16 @@
+packages:
+  - LocalDesign
+  - LocalCut
+  - DesignLibrary
+  - packages/*
+
+allowBuilds:
+  '@mongodb-js/zstd': false
+  exifreader: false
+  node-liblzma: false
+  onnxruntime-node: false
+  protobufjs: false
+minimumReleaseAgeExclude:
+  - vite@8.3.4
+patchedDependencies:
+  react-resizable-panels@4.14.3: LocalCut/patches/react-resizable-panels@4.14.3.patch

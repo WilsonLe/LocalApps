@@ -1,3 +1,4 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
 import {
   usePlaybackTime,
   usePlaybackRange,
@@ -45,7 +46,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Tooltip } from '../components/ui/tooltip';
+import { Tooltip } from '@localapps/ui/tooltip';
 import type { Asset, Clip, Editor, Project } from '../editor';
 import { TimelinePreviews } from './timeline-previews';
 import { TimelineClipPreview } from './TimelineClipPreview';
@@ -845,7 +846,8 @@ export function Timeline(props: Props) {
                     data-solo={!!track.solo}
                   >
                     <div className="track-header">
-                      <button
+                      <InteractionButton
+                        bare
                         type="button"
                         className="track-label"
                         disabled={props.readOnly || track.locked}
@@ -966,7 +968,7 @@ export function Timeline(props: Props) {
                           <Film />
                         )}
                         <span>{trackName(track, index)}</span>
-                      </button>
+                      </InteractionButton>
                       <div className="track-state-row">
                         {track.disabled && (
                           <EyeOff aria-label="Track disabled" />
@@ -1238,7 +1240,8 @@ export function Timeline(props: Props) {
                               </span>
                             </TimelineClipMenu>
                             {!busy && !track.locked && (
-                              <button
+                              <InteractionButton
+                                bare
                                 type="button"
                                 className="timeline-resize-handle"
                                 aria-label={`Resize end of ${clipName(clip, assets)}`}

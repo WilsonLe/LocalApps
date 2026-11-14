@@ -1,19 +1,11 @@
-# Shared UI primitives
+# LocalCut UI adapter
 
-- Keep these components reusable wrappers around the configured shadcn Base UI primitives. The preset is `base-vega` in [components.json](../../../components.json); do not substitute another primitive library through CLI defaults.
-- Use the shared semantic color, border, radius, and typography tokens from [styles.css](../../styles.css). Preserve caller `className`, typed props, and existing variant/data-slot contracts.
-- Keep project state, network work, storage, and editor operations in consumers. A primitive renders interaction semantics; it does not initialize application services.
-- Preserve keyboard interaction, focus visibility, disabled/invalid states, popup positioning, and focus return. Keep primitive refs/props usable by wrappers and callers.
-- The shared Button omits disabled actions, following the user's workspace preference. Owners must keep pending progress and actionable errors visible separately; availability must not bypass revision checks or approval.
-- Consumers supply meaningful labels and dialog titles/descriptions; icon-only actions need accessible names. Do not replace semantic controls with styled generic elements.
-- Use the shared shadcn Base UI Accordion and Collapsible for disclosures. Keep open/close height and indicator motion, respect reduced motion, and preserve form state where a disclosure hides editable controls.
-- Check affected consumers at desktop and narrow widths. Shared styling changes must preserve scrolling, portal layering, and reduced-motion behavior.
+[The LocalApps design system](../../../../DESIGN.md) owns the shadcn primitives.
+This directory only owns LocalCut's Button adapter: an unavailable action that
+uses this adapter is hidden. Use the shared Button when the workspace needs a
+stable target with a visible disabled state. Preserve meaningful progress and
+recovery controls; UI availability does not replace an edit's revision checks.
 
-Run type checking, then the affected real workspace controls; settings exercise keyboard/focus and narrow popup placement:
-
-```sh
-pnpm typecheck
-pnpm test:ui --grep 'workspace settings'
-```
-
-For other primitives, choose their consuming scenario in `tests/browser/workspace*.spec.ts`. See [workspace behavior](../../../docs/workspace.md) and the [development loop](../../../docs/development.md); add no standalone demonstration UI.
+Use `pnpm typecheck` and the affected built workspace scenario. See
+[workspace behavior](../../../docs/workspace.md) and the
+[local development loop](../../../docs/development.md).

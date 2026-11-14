@@ -1,7 +1,9 @@
+import { Checkbox } from "@localapps/ui/checkbox";
+import { Label } from "@localapps/ui/label";
 import { useId, useState } from "react";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { NativeSelect } from "../components/ui/native-select";
+import { Input } from "@localapps/ui/input";
+import { NativeSelect } from "@localapps/ui/native-select";
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 import type { DesignEngine, Snapshot } from "../core/engine";
 import {
@@ -128,23 +130,21 @@ export function FontManager({
             })}
           </div>
           <h3>Add font</h3>
-          <label className="field">
+          <Label layout="stacked" className="field">
             <span>License / permission</span>
             <Input
               value={license}
               maxLength={4000}
               onChange={(e) => setLicense(e.target.value)}
             />
-          </label>
-          <label className="font-permission">
-            <Input
-              type="checkbox"
-              checked={permission}
-              onChange={(e) => setPermission(e.target.checked)}
-            />
-            I can redistribute and embed this font for editing
-          </label>
-          <label className="field">
+          </Label>
+          <Checkbox
+            label="I can redistribute and embed this font for editing"
+            labelClassName="font-permission"
+            checked={permission}
+            onCheckedChange={(checked) => setPermission(checked)}
+          />
+          <Label layout="stacked" className="field">
             <span>Font file</span>
             <Input
               aria-label="Font file"
@@ -189,7 +189,7 @@ export function FontManager({
                 }
               }}
             />
-          </label>
+          </Label>
           {message && <p role="status">{message}</p>}
           {!!warnings.length && (
             <>
@@ -262,7 +262,7 @@ export function FontControls({
   ];
   return (
     <>
-      <label className="field">
+      <Label layout="stacked" className="field">
         <span>Font family</span>
         <NativeSelect
           aria-label="Font family"
@@ -292,9 +292,9 @@ export function FontControls({
             <option key={f}>{f}</option>
           ))}
         </NativeSelect>
-      </label>
+      </Label>
       <div className="property-grid">
-        <label className="field">
+        <Label layout="stacked" className="field">
           <span>Font weight</span>
           <NativeSelect
             aria-label="Font weight"
@@ -312,8 +312,8 @@ export function FontControls({
               <option key={w}>{w}</option>
             ))}
           </NativeSelect>
-        </label>
-        <label className="field">
+        </Label>
+        <Label layout="stacked" className="field">
           <span>Font style</span>
           <NativeSelect
             aria-label="Font style"
@@ -332,12 +332,12 @@ export function FontControls({
               <option key={s}>{s}</option>
             ))}
           </NativeSelect>
-        </label>
+        </Label>
       </div>
       <div className="type-preview">
         <FontSample doc={doc} font={node} label={`${font.family} preview`} />
       </div>
-      <label className="field">
+      <Label layout="stacked" className="field">
         <span>{font.status === "exact" ? "Font source" : "Replacement"}</span>
         <NativeSelect
           aria-label={font.status === "exact" ? "Font source" : "Replacement"}
@@ -357,7 +357,7 @@ export function FontControls({
             </option>
           ))}
         </NativeSelect>
-      </label>
+      </Label>
       <FontManager engine={engine} snapshot={snapshot} />
     </>
   );

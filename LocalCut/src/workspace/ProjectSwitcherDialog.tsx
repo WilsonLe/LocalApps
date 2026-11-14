@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from 'react';
-import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@localapps/ui/dialog';
 
 export default function ProjectSwitcherDialog({
   children,

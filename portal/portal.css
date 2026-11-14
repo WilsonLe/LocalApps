@@ -133,6 +133,17 @@ h2 {
   line-height: 1;
   font-weight: 400;
 }
+.library-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  padding-block: 8px;
+  color: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .back-link {
   display: inline-block;
   margin-top: 32px;

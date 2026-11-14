@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
-import { Menu } from '@base-ui/react/menu';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import type { EditOperation, Project, Track } from '../editor';
 import { trackName } from '../core/timeline';
 
@@ -30,8 +30,6 @@ interface Props {
     scope: TrackOperationScope,
   ) => void;
 }
-const itemClass =
-  'flex min-h-9 cursor-default items-center rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground';
 export function TrackMenu({
   project,
   track,
@@ -86,45 +84,26 @@ export function TrackMenu({
               collisionPadding={8}
               className="z-50 outline-none"
             >
-              <Menu.Popup
-                aria-label={`Track operations: ${label}`}
-                className="max-h-(--available-height) w-48 max-w-[calc(var(--app-viewport-width)-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none"
-              >
-                <Menu.Item
-                  className={itemClass}
-                  onClick={() => openForm('rename')}
-                >
+              <Menu.Popup aria-label={`Track menu: ${label}`} className="w-48">
+                <Menu.Item onClick={() => openForm('rename')}>
                   Rename track
                 </Menu.Item>
-                <Menu.Item
-                  className={itemClass}
-                  onClick={() => patch({ disabled: !track.disabled })}
-                >
+                <Menu.Item onClick={() => patch({ disabled: !track.disabled })}>
                   {track.disabled ? 'Enable track' : 'Disable track'}
                 </Menu.Item>
                 {(track.kind !== 'overlay' || track.muted) && (
-                  <Menu.Item
-                    className={itemClass}
-                    onClick={() => patch({ muted: !track.muted })}
-                  >
+                  <Menu.Item onClick={() => patch({ muted: !track.muted })}>
                     {track.muted ? 'Unmute track' : 'Mute track'}
                   </Menu.Item>
                 )}
-                <Menu.Item
-                  className={itemClass}
-                  onClick={() => patch({ solo: !track.solo })}
-                >
+                <Menu.Item onClick={() => patch({ solo: !track.solo })}>
                   {track.solo ? 'Unsolo track' : 'Solo track'}
                 </Menu.Item>
-                <Menu.Item
-                  className={itemClass}
-                  onClick={() => patch({ locked: !track.locked })}
-                >
+                <Menu.Item onClick={() => patch({ locked: !track.locked })}>
                   {track.locked ? 'Unlock track' : 'Lock track'}
                 </Menu.Item>
                 <Menu.Separator className="my-1 h-px bg-border" />
                 <Menu.Item
-                  className={itemClass}
                   onClick={() =>
                     run({
                       type: 'duplicateTrack',
@@ -137,7 +116,6 @@ export function TrackMenu({
                 </Menu.Item>
                 {!track.locked && index > 0 && (
                   <Menu.Item
-                    className={itemClass}
                     onClick={() =>
                       run({
                         type: 'reorderTrack',
@@ -151,7 +129,6 @@ export function TrackMenu({
                 )}
                 {!track.locked && index < project.tracks.length - 1 && (
                   <Menu.Item
-                    className={itemClass}
                     onClick={() =>
                       run({
                         type: 'reorderTrack',
@@ -168,14 +145,14 @@ export function TrackMenu({
                     <Menu.Separator className="my-1 h-px bg-border" />
                     {!!track.clips.length && (
                       <Menu.Item
-                        className={`${itemClass} text-destructive`}
+                        className="text-destructive data-highlighted:text-destructive"
                         onClick={() => openForm('clear')}
                       >
                         Clear track clips
                       </Menu.Item>
                     )}
                     <Menu.Item
-                      className={`${itemClass} text-destructive`}
+                      className="text-destructive data-highlighted:text-destructive"
                       onClick={() =>
                         track.clips.length
                           ? openForm('delete')

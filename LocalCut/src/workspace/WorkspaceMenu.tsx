@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
-import { Menu } from '@base-ui/react/menu';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
 import { Check, ChevronRight, Settings2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { browserAgentConnection, connectionLabel } from './webmcp/connection';
@@ -33,16 +33,10 @@ export interface WorkspaceMenuProps {
   onImportMedia: () => void;
 }
 
-const popupClass =
-  'max-h-(--available-height) w-60 max-w-[calc(var(--app-viewport-width)-1rem)] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none';
-const itemClass =
-  'relative flex min-h-9 cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm leading-5 outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50';
-const choiceClass = `${itemClass} pl-8`;
-
 function Submenu({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Menu.SubmenuRoot>
-      <Menu.SubmenuTrigger className={itemClass} openOnHover={false}>
+      <Menu.SubmenuTrigger openOnHover={false}>
         <span className="flex-1">{label}</span>
         <ChevronRight
           aria-hidden="true"
@@ -56,7 +50,7 @@ function Submenu({ label, children }: { label: string; children: ReactNode }) {
           collisionPadding={8}
           className="z-50 outline-none"
         >
-          <Menu.Popup aria-label={label} className={popupClass}>
+          <Menu.Popup aria-label={label} className="w-60">
             {children}
           </Menu.Popup>
         </Menu.Positioner>
@@ -138,7 +132,7 @@ export function WorkspaceMenu({
           <Menu.Popup
             id="workspace-settings-menu"
             aria-label="Workspace settings"
-            className={popupClass}
+            className="w-60"
             onFocus={(event) => {
               // The first lazy mount starts open without a Trigger key event.
               if (event.target === event.currentTarget) {
@@ -149,68 +143,47 @@ export function WorkspaceMenu({
             }}
           >
             <Submenu label="Project">
-              {!busy && (
-                <Menu.Item className={itemClass} onClick={onNew}>
-                  New project
-                </Menu.Item>
-              )}
-              {!busy && (
-                <Menu.Item className={itemClass} onClick={onOpen}>
-                  Open project
-                </Menu.Item>
-              )}
+              {!busy && <Menu.Item onClick={onNew}>New project</Menu.Item>}
+              {!busy && <Menu.Item onClick={onOpen}>Open project</Menu.Item>}
               {canBrowseVersions && (
-                <Menu.Item className={itemClass} onClick={onVersions}>
-                  Versions
-                </Menu.Item>
+                <Menu.Item onClick={onVersions}>Versions</Menu.Item>
               )}
               {!busy && hasProject && (
-                <Menu.Item className={itemClass} onClick={onProjectExport}>
-                  Export project
-                </Menu.Item>
+                <Menu.Item onClick={onProjectExport}>Export project</Menu.Item>
               )}
               {!busy && (
-                <Menu.Item className={itemClass} onClick={onProjectImport}>
-                  Import project
-                </Menu.Item>
+                <Menu.Item onClick={onProjectImport}>Import project</Menu.Item>
               )}
               <Menu.Separator className="my-1 h-px bg-border" />
               {!busy && hasProject && (
-                <Menu.Item className={itemClass} onClick={onBackup}>
+                <Menu.Item onClick={onBackup}>
                   Download project backup
                 </Menu.Item>
               )}
               {!busy && (
-                <Menu.Item className={itemClass} onClick={onImportBackup}>
+                <Menu.Item onClick={onImportBackup}>
                   Import project backup
                 </Menu.Item>
               )}
             </Submenu>
             <Submenu label="Workspace">
               {!busy && (
-                <Menu.Item className={itemClass} onClick={onImportMedia}>
-                  Import media
-                </Menu.Item>
+                <Menu.Item onClick={onImportMedia}>Import media</Menu.Item>
               )}
+              {!busy && <Menu.Item onClick={onRecord}>Record screen</Menu.Item>}
               {!busy && (
-                <Menu.Item className={itemClass} onClick={onRecord}>
-                  Record screen
-                </Menu.Item>
-              )}
-              {!busy && (
-                <Menu.Item className={itemClass} onClick={onWorkspaceExport}>
+                <Menu.Item onClick={onWorkspaceExport}>
                   Export workspace
                 </Menu.Item>
               )}
               {!busy && (
-                <Menu.Item className={itemClass} onClick={onWorkspaceImport}>
+                <Menu.Item onClick={onWorkspaceImport}>
                   Import workspace
                 </Menu.Item>
               )}
             </Submenu>
             <Submenu label="View">
               <Menu.CheckboxItem
-                className={choiceClass}
                 checked={mediaOpen}
                 disabled={!hasProject}
                 onCheckedChange={onToggleMedia}
@@ -229,32 +202,24 @@ export function WorkspaceMenu({
                     onFormatChange(value);
                 }}
               >
-                <Menu.RadioItem className={choiceClass} value="mp4">
+                <Menu.RadioItem value="mp4">
                   <ChoiceIndicator radio />
                   MP4
                 </Menu.RadioItem>
-                <Menu.RadioItem className={choiceClass} value="webm">
+                <Menu.RadioItem value="webm">
                   <ChoiceIndicator radio />
                   WebM
                 </Menu.RadioItem>
               </Menu.RadioGroup>
               <Menu.Separator className="my-1 h-px bg-border" />
               {!busy && canExport && (
-                <Menu.Item className={itemClass} onClick={onExport}>
-                  Export video
-                </Menu.Item>
+                <Menu.Item onClick={onExport}>Export video</Menu.Item>
               )}
             </Submenu>
-            <Menu.Item className={itemClass} onClick={onCommands}>
-              Commands
-            </Menu.Item>
-            <Menu.Item className={itemClass} onClick={onShortcuts}>
-              Keyboard shortcuts
-            </Menu.Item>
-            <Menu.Item className={itemClass} onClick={onAppearance}>
-              Appearance
-            </Menu.Item>
-            <Menu.Item className={itemClass} onClick={onBrowserAgent}>
+            <Menu.Item onClick={onCommands}>Commands</Menu.Item>
+            <Menu.Item onClick={onShortcuts}>Keyboard shortcuts</Menu.Item>
+            <Menu.Item onClick={onAppearance}>Appearance</Menu.Item>
+            <Menu.Item onClick={onBrowserAgent}>
               <span className="flex-1">Browser agent</span>
               <span className="text-xs text-muted-foreground">
                 {label === 'Tools ready'

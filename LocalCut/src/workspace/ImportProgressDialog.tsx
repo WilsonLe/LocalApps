@@ -1,3 +1,4 @@
+import { Progress } from '@localapps/ui/progress';
 import { LoaderCircle, Check, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
@@ -7,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 export interface ImportProgress {
   name: string;
@@ -80,20 +81,14 @@ export default function ImportProgressDialog({
                 </span>
               </div>
               {(file.status === 'importing' || file.status === 'completed') && (
-                <div
-                  role="progressbar"
+                <Progress
                   aria-label={file.name}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={
+                  value={
                     file.fraction === undefined
-                      ? undefined
+                      ? null
                       : Math.round(file.fraction * 100)
                   }
-                  className="job-progress"
-                >
-                  <div style={{ width: `${(file.fraction ?? 0) * 100}%` }} />
-                </div>
+                />
               )}
               {file.reason && (
                 <p className="text-muted-foreground">{file.reason}</p>

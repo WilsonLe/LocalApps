@@ -1,3 +1,4 @@
+import { Slider } from '@localapps/ui/slider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Music, Pause, Play } from 'lucide-react';
 import type { Asset, Editor } from '../editor';
@@ -188,10 +189,9 @@ export function AssetClipPreview({
               <Play className="size-4" />
             )}
           </Button>
-          <input
-            type="range"
-            aria-label="Preview position"
-            className="min-w-0 flex-1 accent-primary"
+          <Slider
+            label="Preview position"
+            className="min-w-0 flex-1"
             min={0}
             max={Math.max(0, endUs - startUs)}
             step={1000}
@@ -199,10 +199,9 @@ export function AssetClipPreview({
               Math.max(0, Math.min(endUs - startUs, timeUs - startUs)) || 0
             }
             disabled={!source || !valid}
-            onChange={(event) => {
+            onValueChange={(next) => {
               if (media.current && valid)
-                media.current.currentTime =
-                  (startUs + Number(event.target.value)) / 1e6;
+                media.current.currentTime = (startUs + next) / 1e6;
             }}
           />
           <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">

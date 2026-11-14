@@ -10,6 +10,11 @@
   "scripts": {
     "build": "node scripts/build-pages.mjs",
     "test": "node --test tests/pages.test.mjs",
-    "preview": "node scripts/serve-pages.mjs"
+    "preview": "node scripts/serve-pages.mjs",
+    "check:ui": "node scripts/check-ui-boundary.mjs",
+    "dev:library": "pnpm --dir DesignLibrary dev"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
   }
 }

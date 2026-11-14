@@ -122,14 +122,19 @@ export async function checkDocuments(root, files) {
   return failures;
 }
 
-export async function checkRepository(root = process.cwd()) {
+export async function checkRepository(scope = process.cwd()) {
+  const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: scope,
+    encoding: 'utf8',
+  }).trim();
   const files = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-    { cwd: root, encoding: 'utf8' },
+    { cwd: scope, encoding: 'utf8' },
   )
     .split('\0')
-    .filter((file) => /\.md$/i.test(file));
+    .filter((file) => /\.md$/i.test(file))
+    .map((file) => relative(root, resolve(scope, file)));
   const failures = await checkDocuments(root, files);
   for (const { file, line, url, message } of failures)
     console.error(`${file}:${line}: ${message}: ${url}`);

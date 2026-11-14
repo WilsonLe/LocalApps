@@ -16,6 +16,7 @@ test('core boundaries reject higher-layer imports, aliases, re-exports, dynamic 
   for (const source of [
     "import '../ai/errors';",
     "import '@/workspace/Workspace';",
+    "import '@localapps/ui/button';",
     "export * from '../storage/store';",
   ])
     assert.ok((await rules(source)).includes('no-restricted-imports'), source);
@@ -30,13 +31,17 @@ test('core boundaries reject higher-layer imports, aliases, re-exports, dynamic 
 
 test('runtime modules reject static and dynamic UI dependencies while the composition root can mount UI', async () => {
   const runtime = 'src/services/worker-client.ts';
-  assert.ok(
-    (await rules("export * from '@/workspace/Workspace';", runtime)).includes(
-      'no-restricted-imports',
-    ),
-  );
+  for (const source of [
+    "export * from '@/workspace/Workspace';",
+    "import '@localapps/ui/dialog';",
+  ])
+    assert.ok(
+      (await rules(source, runtime)).includes('no-restricted-imports'),
+      source,
+    );
   for (const source of [
     "void import('../workspace/Workspace');",
+    "void import('@localapps/ui/dialog');",
     'void import(`@/components/ui/button`);',
   ])
     assert.ok(

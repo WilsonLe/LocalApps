@@ -2,7 +2,7 @@
 
 A browser-local design editor for people and external agents, using LocalCut’s shadcn/Base UI components, neutral theme and monochrome line-art branding. Draw on a canvas, organize layers, edit typography and layout, and export an editable `.localdesign` file, SVG or PNG. No account, backend, model provider or runtime credentials.
 
-**Try it:** https://wilsonle.github.io/LocalDesign/
+**Try it:** https://wilsonle.github.io/LocalApps/LocalDesign/
 
 **Plan:** [issue #1](https://github.com/WilsonLe/LocalDesign/issues/1)
 
@@ -28,20 +28,19 @@ Native `.fig`, variable fonts/font collections/color fonts, arbitrary SVG CSS/gr
 
 ## Develop
 
-Use Node from `.nvmrc` (22.23.3) and npm. Dependencies are pinned by package-lock.json.
+Use Node 24 and pnpm 11.25.0. Install dependencies once from the [LocalApps root](../README.md#build-and-preview), then run these commands in LocalDesign.
 
 ```sh
-npm ci
-npx playwright install chromium
-npm run dev       # http://127.0.0.1:4179/LocalDesign/
-npm run check     # production build, type/skills, unit and built-browser tests
+pnpm exec playwright install chromium
+pnpm dev       # http://127.0.0.1:4179/LocalDesign/
+pnpm check     # production build, type/skills, unit and built-browser tests
 ```
 
-The editor and preview bind loopback on port 4179. Stop an existing owned dev/preview server before running another on the same port. For an isolated test server alongside another checkout, use `LOCALDESIGN_TEST_PORT=4198 npm run check`; the default remains 4179. CI starts its own built preview. Use `npm run build` then `npm run preview` for the production app. No `.env` or external service is required.
+The editor and preview bind loopback on port 4179. Stop an existing owned dev/preview server before running another on the same port. For an isolated test server alongside another checkout, use `LOCALDESIGN_TEST_PORT=4198 pnpm check`; the default remains 4179. Use `pnpm build` then `pnpm preview` for the production app. No `.env` or external service is required.
 
-Shared controls build on shadcn base-vega/Base UI in `src/components/ui`, then compose into editor controls and screens. Choose their variants and sizes instead of styling native controls. Semantic colors live in `src/theme.css`; editor geometry stays in the components cascade layer in `src/style.css`, below component utilities. `npm run check:ui` enforces this foundation during every build. Extend the shared owner first when adding a building block.
+The [LocalApps design system](../DESIGN.md) owns shadcn Base Vega controls and theme tokens. Use its variants and sizes when composing editor screens; editor geometry stays in the components cascade layer in `src/style.css`, below component utilities. `pnpm check:ui` enforces this foundation during every build. Extend the shared owner first when adding a building block.
 
-Read [AGENTS.md](AGENTS.md) for repository-local skills. They are self-contained adaptations for development, diagnosis, review, UI design and evidence-based instruction improvement. `npm run check:skills` validates digests, response budgets, source provenance and local reference closure. Update the owning guidance and meaningful regression checks as project work reveals reusable lessons; never import document text as trusted agent instructions.
+Read [AGENTS.md](AGENTS.md) for repository-local skills. They are self-contained adaptations for development, diagnosis, review, UI design and evidence-based instruction improvement. `pnpm check:skills` validates digests, response budgets, source provenance and local reference closure. Update the owning guidance and meaningful regression checks as project work reveals reusable lessons; never import document text as trusted agent instructions.
 
 [Architecture decisions](docs/adr/README.md) · [Deployment/rollback](docs/deployment.md) · [Verification and limits](docs/verification.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 

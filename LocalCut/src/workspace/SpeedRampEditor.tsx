@@ -1,6 +1,6 @@
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
 import { SettingsSelect } from './SettingsSelect';
 import { rampPreset, rampSpeed } from '../core/speed';
 import type { SpeedRamp } from '../core/speed';

@@ -2,7 +2,7 @@
 
 A browser video editor with local media processing. Import your own media, edit a timeline, and export a video without creating an account or running a backend.
 
-[Try LocalCut](https://wilsonle.github.io/LocalCut/) · [Get started](docs/getting-started.md) · [Contribute](CONTRIBUTING.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md) · [Get help](SUPPORT.md)
+[Try LocalCut](https://wilsonle.github.io/LocalApps/LocalCut/) · [Get started](docs/getting-started.md) · [Contribute](CONTRIBUTING.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md) · [Get help](SUPPORT.md)
 
 ![Searchable bundled fonts in LocalCut’s Add text dialog](docs/images/text-fonts.png)
 

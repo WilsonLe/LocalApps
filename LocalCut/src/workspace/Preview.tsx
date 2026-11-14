@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { Editor, Project, PreviewSession } from '../editor';
 import { Button } from '../components/ui/button';
-import { Tooltip } from '../components/ui/tooltip';
+import { Tooltip } from '@localapps/ui/tooltip';
 import { useViewport } from './useViewport';
 import { formatTime, projectDuration, previewFrameSize } from './helpers';
 

@@ -4,7 +4,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../components/ui/select';
+} from '@localapps/ui/select';
 import type { SettingsSelectProps } from './SettingsSelect';
 
 export default function SelectField(props: SettingsSelectProps) {

@@ -1,13 +1,11 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
+import { Label } from '@localapps/ui/label';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Clock3, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Textarea } from '../components/ui/textarea';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../components/ui/popover';
+import { Input } from '@localapps/ui/input';
+import { Textarea } from '@localapps/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@localapps/ui/popover';
 import { formatTime } from './helpers';
 
 export type TranscriptCueDraft = {
@@ -65,7 +63,8 @@ export function TranscriptTimeline({
             >
               <div className="pt-0.5 text-right">
                 {timed ? (
-                  <button
+                  <InteractionButton
+                    bare
                     type="button"
                     className={`rounded px-1 py-1.5 font-mono text-xs tabular-nums outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'text-primary' : 'text-muted-foreground'}`}
                     aria-label={`Preview transcript at ${formatTime(Number(cue.start) * 1e6)}`}
@@ -75,7 +74,7 @@ export function TranscriptTimeline({
                     }}
                   >
                     {formatTime(Number(cue.start) * 1e6)}
-                  </button>
+                  </InteractionButton>
                 ) : (
                   <span className="inline-block px-1 py-1.5 text-xs text-muted-foreground">
                     —
@@ -135,7 +134,7 @@ export function TranscriptTimeline({
                           aria-label={`Transcript timing ${index + 1}`}
                         >
                           <div className="grid grid-cols-2 gap-3">
-                            <label className="grid gap-1 text-xs text-muted-foreground">
+                            <Label className="grid gap-1 text-xs text-muted-foreground">
                               Start (s)
                               <Input
                                 aria-label={`Transcript start ${index + 1} (s)`}
@@ -149,8 +148,8 @@ export function TranscriptTimeline({
                                   update(cue.id, { start: event.target.value })
                                 }
                               />
-                            </label>
-                            <label className="grid gap-1 text-xs text-muted-foreground">
+                            </Label>
+                            <Label className="grid gap-1 text-xs text-muted-foreground">
                               End (s)
                               <Input
                                 aria-label={`Transcript end ${index + 1} (s)`}
@@ -163,7 +162,7 @@ export function TranscriptTimeline({
                                   update(cue.id, { end: event.target.value })
                                 }
                               />
-                            </label>
+                            </Label>
                           </div>
                         </PopoverContent>
                       </Popover>
@@ -204,7 +203,8 @@ export function TranscriptTimeline({
                     {cue.text}
                   </p>
                 ) : (
-                  <button
+                  <InteractionButton
+                    bare
                     ref={(element) => {
                       if (element) editButtons.current.set(cue.id, element);
                       else editButtons.current.delete(cue.id);
@@ -219,7 +219,7 @@ export function TranscriptTimeline({
                       {cue.text}
                     </span>
                     <Pencil className="mt-1 size-3.5 shrink-0 text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" />
-                  </button>
+                  </InteractionButton>
                 )}
               </div>
             </li>

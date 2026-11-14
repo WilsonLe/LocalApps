@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": {
+      "@/*": ["./src/*"],
+      "@localapps/ui": ["../packages/ui/src"],
+      "@localapps/ui/utils": ["../packages/ui/src/utils.ts"]
+    },
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

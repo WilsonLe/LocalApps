@@ -24,18 +24,19 @@ function run(command, args, app, env = {}) {
 }
 
 if (!process.argv.includes("--assemble-only")) {
-  run(
-    "npm",
-    ["run", "build", "--", `--base=${base}LocalDesign/`],
-    "LocalDesign",
-  );
+  run("pnpm", ["run", "build", `--base=${base}LocalDesign/`], "LocalDesign");
   run("pnpm", ["run", "build"], "LocalCut", {
     LOCALCUT_BASE_PATH: `${base}LocalCut/`,
   });
+  run(
+    "pnpm",
+    ["run", "build", `--base=${base}DesignLibrary/`],
+    "DesignLibrary",
+  );
 }
 
 // Refuse mismatched builds before replacing the previous combined artifact.
-for (const app of ["LocalDesign", "LocalCut"]) {
+for (const app of ["LocalDesign", "LocalCut", "DesignLibrary"]) {
   const html = await readFile(join(root, app, "dist/index.html"), "utf8");
   if (!html.includes(`${base}${app}/assets/`))
     throw new Error(`${app} was built for a different base path.`);
@@ -71,11 +72,21 @@ for (const app of ["LocalDesign", "LocalCut"]) {
   );
   apps[app] = { path: `${base}${app}/`, version };
 }
+const libraryOutput = join(output, "DesignLibrary");
+await cp(join(root, "DesignLibrary", "dist"), libraryOutput, {
+  recursive: true,
+});
+for (const name of ["DesignLibrary", "LocalDesign", "LocalCut"]) {
+  await cp(
+    join(root, "packages/ui/LICENSE"),
+    join(output, name, "SHADCN_LICENSE.txt"),
+  );
+}
 const sha = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: root,
   encoding: "utf8",
 }).trim();
-const release = { sha, base, apps };
+const release = { sha, base, apps, designLibrary: `${base}DesignLibrary/` };
 await writeFile(join(output, "release.json"), JSON.stringify(release) + "\n");
 await writeFile(
   join(output, "LocalDesign/release.json"),

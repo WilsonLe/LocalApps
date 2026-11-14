@@ -45,6 +45,37 @@ for (const base of behaviorBases) {
     expect(requests.filter((url) => url.includes('/sounds/audio/'))).toEqual(
       [],
     );
+    const volume = dialog.getByRole('slider', { name: 'Preview volume' });
+    const volumeControl = await volume.evaluate(
+      (input) =>
+        input.closest('[data-slot="slider"]')?.getBoundingClientRect().width,
+    );
+    // Preserve enough track to select a value with a pointer.
+    expect(volumeControl).toBeGreaterThanOrEqual(80);
+    await dialog.getByRole('combobox', { name: 'Sound category' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(volume).toBeFocused();
+    await expect
+      .poll(() =>
+        volume.evaluate(
+          (input) => getComputedStyle(input.parentElement!).outlineStyle,
+        ),
+      )
+      .toBe('solid');
+    await page.keyboard.press('ArrowRight');
+    await expect(volume).toHaveValue('0.45');
+    const track = await dialog
+      .locator('[data-slot="slider-track"]')
+      .boundingBox();
+    expect(track).not.toBeNull();
+    await page.mouse.click(
+      track!.x + track!.width * 0.8,
+      track!.y + track!.height / 2,
+    );
+    await expect
+      .poll(async () => Number(await volume.inputValue()))
+      .toBeGreaterThan(0.65);
+
     const search = dialog.getByLabel('Search sound effects');
     await search.fill('whoosh');
     await expect(dialog.getByRole('listitem')).toHaveCount(3);
@@ -55,8 +86,10 @@ for (const base of behaviorBases) {
     ).toBeVisible();
     await search.fill('concrete');
     await expect(dialog.getByRole('listitem')).toHaveCount(5);
-    const tags = dialog.locator('summary').first();
-    await tags.click();
+    const tags = dialog.getByRole('button', { name: /^Tags for / }).first();
+    await expect(tags).toHaveAttribute('aria-expanded', 'false');
+    await tags.press('Space');
+    await expect(tags).toHaveAttribute('aria-expanded', 'true');
     await dialog
       .getByRole('button', { name: 'pavement', exact: true })
       .first()

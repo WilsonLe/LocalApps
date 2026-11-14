@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { DialogFocusContext } from '../components/ui/dialog-focus';
+import { DialogFocusContext } from '@localapps/ui/dialog-focus';
 import type { LoadingDialogProps } from './LoadingDialog';
 import { onDemand } from './on-demand';
 

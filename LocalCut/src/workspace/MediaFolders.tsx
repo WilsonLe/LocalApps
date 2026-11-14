@@ -1,3 +1,4 @@
+import { Label } from '@localapps/ui/label';
 import {
   useEffect,
   useLayoutEffect,
@@ -24,10 +25,10 @@ import {
   Download,
   Undo2,
 } from 'lucide-react';
-import { Menu } from '@base-ui/react/menu';
-import { AssetMenu, assetMenuItemClass } from './AssetMenu';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
+import { AssetMenu } from './AssetMenu';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Input } from '@localapps/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { showErrorToast } from './error-toast';
 import { downloadFile } from './helpers';
 import SelectField from './SelectField';
@@ -333,7 +334,6 @@ export function LibraryActions({
     <>
       {entry.trashed ? (
         <Menu.Item
-          className={assetMenuItemClass}
           disabled={!editable || state.pending}
           onClick={() => perform({ type: 'restore', entryId: entry.id })}
         >
@@ -343,7 +343,6 @@ export function LibraryActions({
       ) : (
         <>
           <Menu.Item
-            className={assetMenuItemClass}
             disabled={!editable || state.pending}
             onClick={() => open('rename', entry)}
           >
@@ -351,7 +350,6 @@ export function LibraryActions({
             Rename
           </Menu.Item>
           <Menu.Item
-            className={assetMenuItemClass}
             disabled={!editable || state.pending}
             onClick={() => open('move', entry)}
           >
@@ -359,7 +357,6 @@ export function LibraryActions({
             Move to…
           </Menu.Item>
           <Menu.Item
-            className={assetMenuItemClass}
             disabled={!editable || state.pending}
             onClick={() => open('copy', entry)}
           >
@@ -367,7 +364,7 @@ export function LibraryActions({
             Copy to…
           </Menu.Item>
           <Menu.Item
-            className={`${assetMenuItemClass} text-destructive`}
+            className="text-destructive data-highlighted:text-destructive"
             disabled={!editable || state.pending}
             onClick={() => open('trash', entry)}
           >
@@ -378,7 +375,6 @@ export function LibraryActions({
       )}
       {
         <Menu.Item
-          className={assetMenuItemClass}
           onClick={() => {
             if (editor)
               void state
@@ -508,7 +504,7 @@ export function FolderDialog({
           }}
         >
           {(mode === 'create' || mode === 'rename') && (
-            <label className="grid gap-2">
+            <Label className="grid gap-2">
               Name
               <Input
                 autoFocus
@@ -516,10 +512,10 @@ export function FolderDialog({
                 disabled={saving}
                 onChange={(e) => setName(e.target.value)}
               />
-            </label>
+            </Label>
           )}
           {(mode === 'move' || mode === 'copy') && (
-            <label className="grid gap-2">
+            <Label className="grid gap-2">
               Destination
               <SelectField
                 label="Destination"
@@ -554,7 +550,7 @@ export function FolderDialog({
                     })),
                 ]}
               />
-            </label>
+            </Label>
           )}
           {error && (
             <p role="alert" className="text-destructive">

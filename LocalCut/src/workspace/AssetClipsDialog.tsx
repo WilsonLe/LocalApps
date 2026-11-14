@@ -1,23 +1,20 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
+import { Label } from '@localapps/ui/label';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Film, Plus, Trash2 } from 'lucide-react';
 import type { Asset, AssetClip, Editor } from '../editor';
 import { assetClipState, assetTranscriptCues } from '../core/asset-clips';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '../components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@localapps/ui/tabs';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Textarea } from '../components/ui/textarea';
+import { Input } from '@localapps/ui/input';
+import { Textarea } from '@localapps/ui/textarea';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 import { AssetClipPreview } from './AssetClipPreview';
 import { formatTime } from './helpers';
 import {
@@ -245,7 +242,8 @@ export function AssetClipsDialog({
               }}
             >
               {clips.map((clip, index) => (
-                <button
+                <InteractionButton
+                  bare
                   key={clip.id}
                   type="button"
                   role="option"
@@ -267,7 +265,7 @@ export function AssetClipsDialog({
                       {formatTime(canonical(clip).endUs || 0)}
                     </span>
                   )}
-                </button>
+                </InteractionButton>
               ))}
             </div>
           </aside>
@@ -290,7 +288,7 @@ export function AssetClipsDialog({
               />
               {asset.kind !== 'image' && (
                 <div className="grid shrink-0 grid-cols-2 gap-2">
-                  <label className="grid w-20 gap-1 text-xs text-muted-foreground">
+                  <Label className="grid w-20 gap-1 text-xs text-muted-foreground">
                     In (s)
                     <Input
                       type="number"
@@ -303,8 +301,8 @@ export function AssetClipsDialog({
                         update({ start: event.target.value })
                       }
                     />
-                  </label>
-                  <label className="grid w-20 gap-1 text-xs text-muted-foreground">
+                  </Label>
+                  <Label className="grid w-20 gap-1 text-xs text-muted-foreground">
                     Out (s)
                     <Input
                       type="number"
@@ -315,7 +313,7 @@ export function AssetClipsDialog({
                       disabled={saving}
                       onChange={(event) => update({ end: event.target.value })}
                     />
-                  </label>
+                  </Label>
                 </div>
               )}
               {!readOnly && clips.length > 1 && (

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { Clip, Parameter } from '../core/model';
 import { evaluateKeys } from '../core/timing';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Input } from '@localapps/ui/input';
+import { Label } from '@localapps/ui/label';
 import { SettingsSelect } from './SettingsSelect';
 
 const fields: {

@@ -1,5 +1,7 @@
+import { Slider } from '@localapps/ui/slider';
+import { Label } from '@localapps/ui/label';
 import { useEffect, useRef, useState } from 'react';
-import { Menu } from '@base-ui/react/menu';
+import { DropdownMenu as Menu } from '@localapps/ui/dropdown-menu';
 import {
   Archive,
   ArchiveRestore,
@@ -11,14 +13,14 @@ import {
 import type { ProjectSummary } from './project-catalog-cache';
 import type { ProjectCatalogPatch } from '../storage/store';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Input } from '@localapps/ui/input';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog';
+} from '@localapps/ui/dialog';
 
 export function ProjectActions({
   project,
@@ -51,7 +53,7 @@ export function ProjectActions({
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={4} align="end" className="z-50">
-          <Menu.Popup className="project-actions-popup">
+          <Menu.Popup className="min-w-45">
             <Menu.Item onClick={onRename}>
               <Pencil /> Rename
             </Menu.Item>
@@ -183,7 +185,7 @@ export function ProjectDetailsDialog({
           }}
         >
           {mode === 'rename' ? (
-            <label className="grid gap-2">
+            <Label className="grid gap-2">
               Project name
               <Input
                 autoFocus
@@ -192,7 +194,7 @@ export function ProjectDetailsDialog({
                 disabled={pending}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
+            </Label>
           ) : (
             <>
               <div className="project-thumbnail-editor">
@@ -206,7 +208,7 @@ export function ProjectDetailsDialog({
                   <span>Automatic thumbnail</span>
                 )}
               </div>
-              <label className="grid gap-2">
+              <Label className="grid gap-2">
                 Thumbnail image
                 <Input
                   type="file"
@@ -238,28 +240,32 @@ export function ProjectDetailsDialog({
                       });
                   }}
                 />
-              </label>
+              </Label>
               {image && (
                 <>
                   {(['x', 'y'] as const).map((axis) => (
-                    <label className="grid gap-2" key={axis}>
+                    <Label className="grid gap-2" key={axis}>
                       {axis === 'x'
                         ? 'Horizontal position'
                         : 'Vertical position'}
-                      <input
-                        type="range"
+                      <Slider
+                        label={
+                          axis === 'x'
+                            ? 'Horizontal position'
+                            : 'Vertical position'
+                        }
                         min={0}
                         max={100}
                         value={position[axis]}
                         disabled={pending}
-                        onChange={(event) =>
+                        onValueChange={(next) =>
                           setPosition({
                             ...position,
-                            [axis]: Number(event.target.value),
+                            [axis]: next,
                           })
                         }
                       />
-                    </label>
+                    </Label>
                   ))}
                   <Button
                     type="button"

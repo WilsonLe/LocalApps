@@ -1,3 +1,4 @@
+import { Button as InteractionButton } from '@localapps/ui/button';
 import { type PlaybackPosition } from './playback-position';
 import {
   useRef,
@@ -5,7 +6,7 @@ import {
   useSyncExternalStore,
   type ComponentProps,
 } from 'react';
-import { ContextMenu } from '@base-ui/react/context-menu';
+import { ContextMenu } from '@localapps/ui/context-menu';
 import {
   MousePointer2,
   Scissors,
@@ -14,9 +15,6 @@ import {
 } from 'lucide-react';
 import type { Clip, EditOperation, Project } from '../editor';
 import type { TrackOperationScope } from './TrackMenu';
-
-const itemClass =
-  'flex min-h-9 cursor-default items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-50';
 
 export function TimelineClipMenu({
   project,
@@ -72,7 +70,7 @@ export function TimelineClipMenu({
     >
       <ContextMenu.Trigger
         {...triggerProps}
-        render={<button ref={trigger} type="button" />}
+        render={<InteractionButton bare ref={trigger} type="button" />}
         aria-haspopup="menu"
         onTouchStart={() => {
           heldTouch.current = false;
@@ -112,10 +110,9 @@ export function TimelineClipMenu({
           <ContextMenu.Popup
             aria-label="Clip actions"
             finalFocus={trigger}
-            className="max-h-(--available-height) w-48 max-w-[calc(var(--app-viewport-width)-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none"
+            className="w-48"
           >
             <ContextMenu.Item
-              className={itemClass}
               disabled={busy || stale}
               onClick={() => {
                 // The focused menu item is transient. Carry the persistent clip
@@ -126,16 +123,11 @@ export function TimelineClipMenu({
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               Properties
             </ContextMenu.Item>
-            <ContextMenu.Item
-              className={itemClass}
-              disabled={stale}
-              onClick={onSelect}
-            >
+            <ContextMenu.Item disabled={stale} onClick={onSelect}>
               <MousePointer2 className="size-4" aria-hidden="true" />
               Select clip
             </ContextMenu.Item>
             <ContextMenu.Item
-              className={itemClass}
               disabled={
                 cannotEdit ||
                 timeUs <= clip.startUs ||
@@ -156,7 +148,6 @@ export function TimelineClipMenu({
               Split at playhead
             </ContextMenu.Item>
             <ContextMenu.Item
-              className={itemClass}
               disabled={cannotEdit}
               onClick={() => apply([{ type: 'removeClip', clipId: clip.id }])}
             >
