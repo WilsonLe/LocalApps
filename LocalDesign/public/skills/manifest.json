@@ -1,5 +1,5 @@
 {
-  "bundleVersion": "1.2.1",
+  "bundleVersion": "1.3.1",
   "maxResponseBytes": 48000,
   "source": {
     "url": "https://github.com/WilsonLe/agentic-workflows",
@@ -13,14 +13,16 @@
       "title": "LocalDesign getting started",
       "whenToUse": "Use when first connecting to LocalDesign or creating, importing, editing, previewing or exporting a design.",
       "supportedOutcomes": [
-        "static design authoring",
+        "native design authoring",
+        "reusable components and themes",
+        "local review and prototypes",
         "rendered verification",
         "portable export"
       ],
-      "version": "1.2.1",
+      "version": "1.3.1",
       "path": "getting-started.md",
-      "sha256": "e6f6aee068f0a260629e4dec227d4f37098cbc5672d641bdffd068c9c943f6df",
-      "bytes": 16251,
+      "sha256": "37b767a44b16634612eb5848a73075374feec7f37d1c36a51d8280403f3a0c81",
+      "bytes": 31615,
       "originalSkillIds": []
     },
     {
@@ -28,30 +30,38 @@
       "title": "UI design and visual critique",
       "whenToUse": "Use when composing or reviewing screens, cards, dashboards, forms, hierarchy, disclosure and accessible static design.",
       "supportedOutcomes": [
-        "static design authoring",
+        "native design authoring",
+        "reusable components and themes",
+        "local review and prototypes",
         "rendered verification",
         "portable export"
       ],
-      "version": "1.2.1",
+      "version": "1.3.1",
       "path": "ui-design.md",
-      "sha256": "20fbb2e204dbae08f1555635eb97fc15131738cae84c32edf4692ddaa32b972a",
-      "bytes": 18446,
-      "originalSkillIds": ["ui-design"]
+      "sha256": "48ee7940a17727bf3698423bf1e4072aebc2cef265e6c5585d77360b8ebcfc91",
+      "bytes": 33810,
+      "originalSkillIds": [
+        "ui-design"
+      ]
     },
     {
       "id": "typography",
       "title": "Typography and text fit",
       "whenToUse": "Use when choosing available fonts, establishing text hierarchy, wrapping, line height, tracking, language coverage or checking overflow.",
       "supportedOutcomes": [
-        "static design authoring",
+        "native design authoring",
+        "reusable components and themes",
+        "local review and prototypes",
         "rendered verification",
         "portable export"
       ],
-      "version": "1.2.1",
+      "version": "1.3.1",
       "path": "typography.md",
-      "sha256": "e284a9e131f0520023d317ed598a9ed704fe051e14b323b5240c152ba5ef1447",
-      "bytes": 18842,
-      "originalSkillIds": ["typography"]
+      "sha256": "8fec78ce71df29b7dbae0e5e380dd451e97400f78a502cecf376860b391a6bf5",
+      "bytes": 34206,
+      "originalSkillIds": [
+        "typography"
+      ]
     }
   ],
   "sourceInventory": [
@@ -59,7 +69,7 @@
       "path": "ui-design/SKILL.md",
       "sha256": "47a5b923de4e42bfac7521430cbf78df27b1e1a5fb15327705e4301abc596b1f",
       "disposition": "adapted",
-      "reason": "Relevant guidance embedded in local skills; host/plugin dependencies replaced with repository/tool contracts. Local theme guidance follows the light/dark interface and leaves authored design paints explicit."
+      "reason": "Relevant guidance embedded in local skills; host/plugin dependencies replaced with repository/tool contracts."
     },
     {
       "path": "ui-design/agents/openai.yaml",
@@ -392,5 +402,5 @@
       "reason": "Host orchestration, source-only examples, generator metadata, or unrelated workflows are outside this static editor and its concise development adaptations."
     }
   ],
-  "adaptationNotes": "Bundle 1.2.0 adds workspace-list roots, documentOpen status, guarded close and URL-synchronized create/open/import/copy guidance. Bundle 1.1.0 added LocalDesign font catalog/assignment, licensed local font ingress, preserved requested identity and explicit mapping, glyph/portability warnings, schema-v2 native files and pixel/reopen evidence. Preserves large-document resource ceilings and semantic Layers guidance from main. Upstream provenance and browser preference remain unchanged."
+  "adaptationNotes": "Bundle 1.3.1 documents WebMCP as the sole agent interface. It covers native context, inspection/previews, raster ingress, tokens/themes, icons, components, checkpoints, portable packages/clipboard, local review/activity, prototypes, human handoff and exports. The shared action guards, artifact limits, schema-v3 migration and browser preference remain documented."
 }

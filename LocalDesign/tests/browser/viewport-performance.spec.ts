@@ -7,6 +7,139 @@ import {
 import { harness, open, inspect, tool } from "./helpers";
 import { readFileSync } from "node:fs";
 
+test("native paint and retained hit regions keep logical selection for transparent, rounded and unpainted nodes", async ({
+  page,
+}) => {
+  await harness(page);
+  await open(page);
+  const d = await inspect(page);
+  const nodes = [
+    { id: "filled", type: "rectangle", x: 40, y: 80, fill: "#cc5555" },
+    { id: "transparent", type: "frame", x: 260, y: 80, fill: "#00000000" },
+    {
+      id: "invisible",
+      type: "rectangle",
+      x: 480,
+      y: 80,
+      fill: "#cc5555",
+      opacity: 0,
+    },
+    {
+      id: "unpainted",
+      type: "rectangle",
+      x: 40,
+      y: 260,
+      fill: "none",
+      stroke: "#111111",
+    },
+    {
+      id: "rounded",
+      type: "frame",
+      x: 260,
+      y: 260,
+      fill: "#dddddd",
+      radius: 40,
+    },
+    { id: "empty-group", type: "group", x: 480, y: 260 },
+    { id: "ellipse", type: "ellipse", x: 40, y: 440, fill: "#cc5555" },
+    {
+      id: "path",
+      type: "path",
+      x: 260,
+      y: 440,
+      fill: "none",
+      stroke: "#111111",
+      path: "M0 0L20 20",
+    },
+  ];
+  await tool(page, "apply_edits", {
+    expectedDocumentId: d.documentId,
+    expectedRevision: d.revision,
+    requestId: "logical-hit-regions",
+    commands: nodes.map((node) => ({
+      op: "create",
+      node: {
+        ...node,
+        name: node.id,
+        pageId: d.pageId,
+        width: 160,
+        height: 100,
+      },
+    })),
+  });
+  await tool(page, "viewport", { x: 0, y: 0, zoom: 1 });
+  const canvas = await page.getByTestId("canvas").boundingBox();
+  expect(canvas).not.toBeNull();
+  const revision = (await inspect(page)).revision;
+  for (const node of nodes) {
+    await page.mouse.click(canvas!.x + node.x + 2, canvas!.y + node.y + 2);
+    expect((await inspect(page)).selection, node.id).toEqual([node.id]);
+    expect((await inspect(page)).revision).toBe(revision);
+  }
+  for (const id of ["filled", "transparent", "invisible"])
+    await expect(page.locator(`[data-node-id="${id}"] > rect`)).toHaveCount(1);
+});
+
+for (const width of [1440, 390])
+  test(`minimum-zoom navigation immediately reveals editable text at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await harness(page);
+    await open(page);
+    const d = await inspect(page);
+    await tool(page, "apply_edits", {
+      expectedDocumentId: d.documentId,
+      expectedRevision: d.revision,
+      requestId: "edge-text",
+      commands: [
+        {
+          op: "create",
+          node: {
+            id: "edge-text",
+            name: "Edge text",
+            type: "text",
+            pageId: d.pageId,
+            x: -6000,
+            y: 3000,
+            width: 1600,
+            height: 400,
+            text: "Edge navigation",
+            fontSize: 180,
+            fill: "#111111",
+          },
+        },
+      ],
+    });
+    await tool(page, "viewport", { x: 0, y: 0, zoom: 0.05 });
+    const text = page.locator('[data-node-id="edge-text"]');
+    await expect(text).toHaveCount(0);
+    const before = await tool(page, "export_design", {
+      format: "svg",
+      ids: ["edge-text"],
+    });
+    for (const x of [350, 0, 350]) {
+      await tool(page, "viewport", { x, y: 0, zoom: 0.05 });
+      if (x) {
+        await expect(text).toBeVisible();
+        await expect(text).toHaveAccessibleName("Edge navigation");
+      } else await expect(text).toHaveCount(0);
+    }
+    const hit = await text.boundingBox();
+    expect(hit).not.toBeNull();
+    await page.mouse.click(hit!.x + hit!.width / 2, hit!.y + hit!.height / 2);
+    const after = await inspect(page);
+    expect(after.selection).toEqual(["edge-text"]);
+    expect(after.revision).toBe(d.revision + 1);
+    const exported = await tool(page, "export_design", {
+      format: "svg",
+      ids: ["edge-text"],
+    });
+    const read = async (id: string) =>
+      (await tool(page, "artifact", { action: "read", id })).base64;
+    expect(await read(exported.id)).toBe(await read(before.id));
+  });
+
 test("text-heavy multi-screen board renders only the visible area and preserves offscreen work", async ({
   page,
 }, testInfo) => {
@@ -287,6 +420,8 @@ test("compact canvas text preserves outlined glyph pixels, overlaps, alpha and s
         "Italic overhang fj AV",
         "Transparent paint",
         "Outlined text",
+        "Shared geometry",
+        "Shared geometry",
       ].map((text, i) => ({
         op: "create",
         node: {
@@ -299,9 +434,9 @@ test("compact canvas text preserves outlined glyph pixels, overlaps, alpha and s
           y: i * 120,
           width: 900,
           height: 100,
-          fontSize: 56,
+          fontSize: i === 7 ? 42.125 : i === 6 ? 64.5 : 56,
           text,
-          fill: i === 4 ? "#ffffff80" : "#fff",
+          fill: i === 7 ? "#ff000080" : i === 4 ? "#ffffff80" : "#fff",
           fontFamily: i === 3 ? "Source Serif 4" : "Inter",
           fontStyle: i === 3 ? "italic" : "normal",
           letterSpacing: i === 2 ? -15 : 0,
@@ -329,6 +464,15 @@ test("compact canvas text preserves outlined glyph pixels, overlaps, alpha and s
   expect(
     await page.locator('[data-node-id="sample-0"] [data-compact-text]').count(),
   ).toBeLessThan(5);
+  expect(
+    await page
+      .locator('[data-node-id="sample-6"] [data-compact-text]')
+      .getAttribute("href"),
+  ).toBe(
+    await page
+      .locator('[data-node-id="sample-7"] [data-compact-text]')
+      .getAttribute("href"),
+  );
   expect(
     await page.locator('[data-node-id="sample-5"] use').count(),
   ).toBeGreaterThan(5);

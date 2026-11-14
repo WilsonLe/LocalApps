@@ -1,3 +1,5 @@
+import { CollapsibleDisclosure } from "@localapps/ui/collapsible";
+import { Label } from "@localapps/ui/label";
 import { FieldLabel } from "@localapps/ui/field";
 import { Checkbox } from "@localapps/ui/checkbox";
 import { Button } from "../components/ui/button";
@@ -21,6 +23,7 @@ import type { Command } from "../core/commands";
 import { uid, type DesignNode } from "../core/model";
 import { measureText } from "../render/text";
 import { FontControls, FontManager } from "./Fonts";
+import { ComponentSelection } from "./ComponentResources";
 import type { Theme } from "./ThemeToggle";
 function Field({
   label,
@@ -222,6 +225,11 @@ export const Inspector = memo(function Inspector({
         </>
       ) : (
         <>
+          <ComponentSelection
+            engine={engine}
+            document={doc}
+            onError={onError}
+          />
           <Section title={nodes.length > 1 ? "Selection" : "Layer"}>
             <Field
               label="Name"
@@ -429,6 +437,96 @@ export const Inspector = memo(function Inspector({
                 value={n.path}
                 onChange={(path) => patch({ path })}
               />
+              <Checkbox
+                label="Scale path with bounds"
+                labelClassName="check-line text-[10px] gap-1.5"
+                checked={!!n.pathViewBox}
+                onCheckedChange={(checked) =>
+                  patch({
+                    pathViewBox: checked
+                      ? { width: n.width, height: n.height }
+                      : null,
+                  })
+                }
+              />
+              {n.pathViewBox && (
+                <div className="property-grid">
+                  <Field
+                    label="Path width"
+                    type="number"
+                    value={n.pathViewBox.width}
+                    min={0.1}
+                    onChange={(value) =>
+                      patch({
+                        pathViewBox: {
+                          ...n.pathViewBox!,
+                          width: Number(value),
+                        },
+                      })
+                    }
+                  />
+                  <Field
+                    label="Path height"
+                    type="number"
+                    value={n.pathViewBox.height}
+                    min={0.1}
+                    onChange={(value) =>
+                      patch({
+                        pathViewBox: {
+                          ...n.pathViewBox!,
+                          height: Number(value),
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+              <Label layout="stacked" className="field">
+                <span>Line cap</span>
+                <NativeSelect
+                  aria-label="Line cap"
+                  value={n.strokeLinecap}
+                  onChange={(event) =>
+                    patch({
+                      strokeLinecap: event.target
+                        .value as DesignNode["strokeLinecap"],
+                    })
+                  }
+                >
+                  {["butt", "round", "square"].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Label>
+              <Label layout="stacked" className="field">
+                <span>Line join</span>
+                <NativeSelect
+                  aria-label="Line join"
+                  value={n.strokeLinejoin}
+                  onChange={(event) =>
+                    patch({
+                      strokeLinejoin: event.target
+                        .value as DesignNode["strokeLinejoin"],
+                    })
+                  }
+                >
+                  {["miter", "round", "bevel"].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Label>
+              {n.attribution && (
+                <CollapsibleDisclosure
+                  summary="Attribution"
+                  className="resource-license"
+                >
+                  <pre>{n.attribution}</pre>
+                </CollapsibleDisclosure>
+              )}
             </Section>
           )}
           {n.type === "frame" && (
