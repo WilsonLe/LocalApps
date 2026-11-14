@@ -5,10 +5,27 @@ import { runInNewContext } from "node:vm";
 import { server } from "../scripts/serve-pages.mjs";
 
 const output = new URL("../dist/", import.meta.url);
-const { base, apps, designLibrary } = JSON.parse(
+const { sha, base, apps, designLibrary } = JSON.parse(
   await readFile(new URL("release.json", output), "utf8"),
 );
 const fallback = await readFile(new URL("route-fallback.js", output), "utf8");
+
+test("LocalDesign publishes its version and the delivered skill bundle identity", async () => {
+  const [release, skills, source] = await Promise.all(
+    [
+      new URL("LocalDesign/release.json", output),
+      new URL("LocalDesign/skills/manifest.json", output),
+      new URL("../LocalDesign/public/skills/manifest.json", import.meta.url),
+    ].map(async (url) => JSON.parse(await readFile(url, "utf8"))),
+  );
+  assert.equal(skills.bundleVersion, source.bundleVersion);
+  assert.ok(skills.bundleVersion);
+  assert.deepEqual(release, {
+    sha,
+    ...apps.LocalDesign,
+    skillBundleVersion: skills.bundleVersion,
+  });
+});
 
 test("preview supports WebAssembly streaming for the font engine", async (t) => {
   await new Promise((ready) => server.listen(0, "127.0.0.1", ready));

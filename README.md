@@ -50,7 +50,7 @@ Configure `WilsonLe/LocalApps` Pages to use **GitHub Actions**. The [root deploy
 
 GitHub Pages has a shared site-level fallback. Root `404.html` sends app paths to that app's entry; an injected script restores the original path, query and fragment before application modules start. Unknown paths show a not-found page with a portal link. The fallback makes a short redirect through the app entry; it does not move workspace data. App `404.html` files are preserved for compatibility with other static hosts.
 
-After deployment, verify `release.json` against the merged commit, open the portal, both apps and the Design Library, create disposable workspaces, reload their direct URLs, and check lazy modules, workers and fonts. LocalDesign also publishes `LocalDesign/release.json`; LocalCut's existing `LocalCut/build-info.json` reports its build commit.
+After deployment, verify `release.json` against the merged commit, open the portal, both apps and the Design Library, create disposable workspaces, reload their direct URLs, and check lazy modules, workers and fonts. `LocalDesign/release.json` also records the version from the published skills manifest. LocalCut's `LocalCut/build-info.json` reports its build commit.
 
 Workspace data remains local to the browser and origin. This library does not copy or upload personal projects. Export portable backups before changing hosting origins; unrelated pages on a shared origin may access browser-local data.
 

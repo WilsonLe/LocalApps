@@ -88,9 +88,15 @@ const sha = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 const release = { sha, base, apps, designLibrary: `${base}DesignLibrary/` };
 await writeFile(join(output, "release.json"), JSON.stringify(release) + "\n");
+const { bundleVersion: skillBundleVersion } = JSON.parse(
+  await readFile(join(output, "LocalDesign/skills/manifest.json"), "utf8"),
+);
+if (typeof skillBundleVersion !== "string" || !skillBundleVersion) {
+  throw new Error("LocalDesign skill manifest has no bundle version.");
+}
 await writeFile(
   join(output, "LocalDesign/release.json"),
-  JSON.stringify({ sha, ...apps.LocalDesign }) + "\n",
+  JSON.stringify({ sha, ...apps.LocalDesign, skillBundleVersion }) + "\n",
 );
 await writeFile(join(output, ".nojekyll"), "");
 console.log(`Built LocalApps at ${base} (${sha}).`);

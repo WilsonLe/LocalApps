@@ -2,6 +2,10 @@
 
 Keep evidence-based lessons using the improvement skill. No speculative rules or private design content.
 
+## 2026-11-14 — Check release identity in the published artifact
+
+[LocalApps PR #8](https://github.com/WilsonLe/LocalApps/pull/8) review found that the combined Pages build omitted `skillBundleVersion` while an app test validated the unused standalone workflow. The root build now reads the packaged skill manifest, and the root Pages test checks that the emitted app release agrees with it. This applies to release metadata; the app checks still verify skill content and hashes. After a deployment, compare the live app release SHA and skill bundle version with the merged commit and the served manifest.
+
 ## 2026-11-13 — Match browser checks to the artifact base
 
 [LocalApps issue #4](https://github.com/WilsonLe/LocalApps/issues/4): standalone Chromium tests timed out after a combined Pages build. Traces showed assets requested from /LocalApps/LocalDesign/ while the Vite test server served /LocalDesign/. Run the editor's check (which rebuilds its own base) before assembling Pages; use the root preview for the combined artifact. Verify that the built HTML's base matches the server before investigating control failures.

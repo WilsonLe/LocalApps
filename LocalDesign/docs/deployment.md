@@ -12,7 +12,9 @@ verify portal navigation and direct workspace reloads. For a standalone
 LocalDesign preview, run `pnpm --dir LocalDesign build` and
 `pnpm --dir LocalDesign preview` from the root.
 
-After an authorized deployment, verify the SHA in LocalDesign/release.json.
+After an authorized deployment, verify the SHA and skill bundle version in
+`LocalDesign/release.json` against the merged commit and the published skills
+manifest.
 Check blank drawing, inspector edits, skill retrieval and actual tool
 discovery/edit/export in a WebMCP-capable browser. Confirm that direct links
 restore their full URL and hashed assets load. Keep browser storage intact
